@@ -1,7 +1,0 @@
-{
-  "tool_name": "mcp__Claude_Browser__navigate",
-  "tool_input_preview": "{\"url\":\"https://kongpot9.github.io/dungeon-g/\",\"tabId\":\"tab-7\"}",
-  "error": "No preview is open. Use preview_start with {\"url\": \"https://…\"} to open a browser tab at a URL, or with {\"name\": \"…\"} to start a dev server from .claude/launch.json.",
-  "timestamp": "2026-08-14T04:13:22.953Z",
-  "retry_count": 1
-}
