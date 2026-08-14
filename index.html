@@ -312,7 +312,7 @@
     <button id="start-btn">모험 시작</button>
     <div style="display:flex; gap:10px;">
       <button class="menu-btn" id="gacha-open">🎰 뽑기</button>
-      <button class="menu-btn" id="dex-open">📖 도감</button>
+      <button class="menu-btn" id="dex-open">📖 캐릭터</button>
     </div>
     <div class="ticket-chip ticket-view"></div>
     <div id="title-studio">구예준 스튜디오</div>
@@ -414,7 +414,7 @@
   <div id="dex-screen" class="sub-screen">
     <div class="sub-head">
       <button class="back-btn">← 뒤로</button>
-      <div class="sub-title">📖 도감</div>
+      <div class="sub-title">📖 캐릭터</div>
       <div class="ticket-chip ticket-view"></div>
     </div>
     <div id="dex-grid"></div>
@@ -854,7 +854,7 @@ $('pull-btn').onclick = () => {
     card.innerHTML = charArt(pick.id) +
       '<div style="font-weight:900;font-size:17px;color:#fff">' + pick.name + '</div>' +
       '<div style="color:#ffd94a;font-size:13px">' + pick.stars + ' ' + pick.rank + '</div>' +
-      '<div style="font-size:12px;color:' + (isNew ? '#7cf76a' : '#9c92c4') + '">' + (isNew ? 'NEW! 도감 등록!' : '중복 +1') + '</div>';
+      '<div style="font-size:12px;color:' + (isNew ? '#7cf76a' : '#9c92c4') + '">' + (isNew ? 'NEW! 캐릭터 등록!' : '중복 +1') + '</div>';
     $('gacha-result').classList.add('on');
     if (legendary) $('gacha-msg').textContent = '"...다시 만났군." — 드래베오';
     pulling = false;
@@ -871,7 +871,7 @@ function renderDex() {
       '<div style="font-size:11px;color:#9c92c4;min-height:14px">' + (n ? c.desc : '') + '</div>' +
       '<div class="dex-count">' + (n ? '보유 ' + n : '미획득') + '</div></div>';
   }).join('');
-  $('dex-progress').textContent = '도감 완성률 ' + Math.round(owned / CHARS.length * 100) + '%' +
+  $('dex-progress').textContent = '캐릭터 수집률 ' + Math.round(owned / CHARS.length * 100) + '%' +
     (owned === CHARS.length ? ' — G의 비밀에 가까워지고 있다...' : '');
 }
 
