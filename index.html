@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>던전G</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body { height: 100%; overflow: hidden; background: #0d0b14; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
+
+  /* ── 세로로 들면 돌려달라고 하기 (가로 게임) ── */
+  #rotate-overlay {
+    position: fixed; inset: 0; z-index: 999; display: none;
+    flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    background: #0d0b14; color: #e8e2ff; font-size: 20px; font-weight: 700;
+  }
+  #rotate-overlay .phone { font-size: 64px; animation: rotatePhone 1.5s ease-in-out infinite; }
+  @keyframes rotatePhone { 0%,20% { transform: rotate(0);} 60%,100% { transform: rotate(90deg);} }
+  @media (orientation: portrait) { #rotate-overlay { display: flex; } }
+
+  #game { position: relative; width: 100%; height: 100%; overflow: hidden; }
+
+  /* ── 타이틀 ── */
+  #title-screen {
+    position: absolute; inset: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: radial-gradient(ellipse at 50% 30%, #2a1f4d 0%, #0d0b14 70%);
+  }
+  .torch { position: absolute; font-size: 26px; animation: flicker 1.2s infinite alternate; }
+  @keyframes flicker { from { opacity: .7; transform: scale(1);} to { opacity: 1; transform: scale(1.1);} }
+  #game-logo {
+    font-size: 64px; font-weight: 900; letter-spacing: 4px;
+    background: linear-gradient(180deg, #ffe9a0 10%, #f5b53f 45%, #a86a1c 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 4px 30px rgba(245,181,63,.35);
+    animation: logoIn 1s ease-out;
+  }
+  #game-logo .g { display: inline-block; font-size: 80px; transform: rotate(8deg); animation: gWiggle 2s ease-in-out infinite; }
+  @keyframes gWiggle { 0%,100% { transform: rotate(8deg);} 50% { transform: rotate(-6deg) scale(1.08);} }
+  @keyframes logoIn { from { opacity: 0; transform: translateY(-30px) scale(1.4);} to { opacity: 1; transform: none;} }
+  #title-sub { color: #8f86b5; font-size: 13px; letter-spacing: 1px; }
+  #title-studio { position: absolute; bottom: 14px; color: #554d78; font-size: 11px; }
+  #start-btn {
+    margin-top: 6px; padding: 13px 46px; font-size: 20px; font-weight: 800; color: #2b1c05;
+    background: linear-gradient(180deg, #ffe9a0, #f0a93a); border: none; border-radius: 14px;
+    box-shadow: 0 5px 0 #8a5a14, 0 10px 24px rgba(0,0,0,.5); cursor: pointer;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  #start-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #8a5a14; }
+  @keyframes pulse { 0%,100% { transform: scale(1);} 50% { transform: scale(1.05);} }
+
+  /* ── 전투 (가로 레이아웃) ── */
+  #battle-screen {
+    position: absolute; inset: 0; display: none;
+    background:
+      radial-gradient(ellipse at 50% 120%, rgba(120,90,40,.25), transparent 60%),
+      linear-gradient(180deg, #17122b 0%, #1e1633 60%, #241a33 100%);
+  }
+  #battle-screen.on { display: block; }
+  .brick {
+    position: absolute; inset: 0; opacity: .1; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.25) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.25) 1px, transparent 1px);
+    background-size: 64px 32px;
+  }
+  #dungeon-name { position: absolute; top: 8px; width: 100%; text-align: center; color: #b9aee0; font-size: 13px; letter-spacing: 2px; }
+  #battle-screen.has-map .brick { display: none; }
+  #battle-screen.has-map #dungeon-name { color: #fff; text-shadow: 0 1px 4px #000; }
+  .note { position: absolute; top: 8px; right: 10px; z-index: 30; color: #6c6394; font-size: 10px; }
+
+  #arena { position: absolute; inset: 0; }
+  #arena.shake { animation: shake .3s; }
+  @keyframes shake { 0%,100% { transform: none;} 25% { transform: translate(-7px,3px);} 50% { transform: translate(6px,-4px);} 75% { transform: translate(-3px,2px);} }
+
+  .fighter { position: absolute; text-align: center; }
+
+  /* ── 전설 캐릭터 (임시 그림: 황금 실루엣 + 오라) ── */
+  #legend { left: 8%; bottom: 24%; z-index: 5; transition: transform .18s; }
+  #legend.gone { animation: recall 1.2s forwards; }
+  @keyframes recall { 0% { opacity: 1; filter: brightness(1);} 60% { opacity: 1; filter: brightness(3);} 100% { opacity: 0; transform: translateY(-120px) scale(.3); filter: brightness(5);} }
+  #legend.lunge { transform: translateX(60px); }
+  #aura {
+    position: absolute; left: 50%; top: 42%; width: 190px; height: 190px; transform: translate(-50%,-50%);
+    background: conic-gradient(from 0deg, transparent 0 20deg, rgba(255,215,80,.28) 30deg 40deg, transparent 50deg 90deg, rgba(255,215,80,.28) 100deg 110deg, transparent 120deg 160deg, rgba(255,215,80,.28) 170deg 180deg, transparent 190deg 230deg, rgba(255,215,80,.28) 240deg 250deg, transparent 260deg 300deg, rgba(255,215,80,.28) 310deg 320deg, transparent 330deg);
+    border-radius: 50%; animation: auraSpin 5s linear infinite; pointer-events: none;
+  }
+  @keyframes auraSpin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+  #legend-sprite {
+    position: relative; width: 96px; height: 122px; margin: 0 auto;
+    filter: drop-shadow(0 0 18px rgba(255,205,60,.7)) drop-shadow(0 8px 10px rgba(0,0,0,.5));
+    animation: breathe 2s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-5px);} }
+  #legend-sprite .head { width: 50px; height: 50px; margin: 0 auto; border-radius: 50%; background: linear-gradient(160deg, #ffe9a0, #d99a24); position: relative; }
+  #legend-sprite .head::after { content: '★'; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-52%); font-size: 26px; color: #7a4a00; }
+  #legend-sprite .body { width: 70px; height: 62px; margin: -8px auto 0; border-radius: 22px 22px 12px 12px; background: linear-gradient(160deg, #ffd45e, #b87a10); }
+  #legend-sprite .cape { position: absolute; top: 46px; left: -6px; width: 30px; height: 66px; background: linear-gradient(180deg,#e0484f,#8e1b2e); border-radius: 8px 40% 50% 20%; z-index: -1; animation: capeWave 1.6s ease-in-out infinite; transform-origin: top; }
+  @keyframes capeWave { 0%,100% { transform: rotate(4deg);} 50% { transform: rotate(-7deg);} }
+  .legend-tag {
+    margin-top: 6px; font-size: 14px; font-weight: 900;
+    background: linear-gradient(180deg,#fff3bd,#f0a93a); -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 14px rgba(245,181,63,.5);
+  }
+  .legend-rank { font-size: 10px; color: #ffd94a; letter-spacing: 2px; }
+
+  /* ── 슬라임들 ── */
+  .slime-unit { opacity: 0; transform: translateX(70px); transition: all .5s ease-out; }
+  .slime-unit.show { opacity: 1; transform: none; }
+  .slime-unit.hurt { animation: hurtFx .3s; }
+  .slime-unit.dead .slime-body { animation: splat .45s forwards; }
+  @keyframes hurtFx { 0%,100% { filter: none;} 50% { filter: brightness(2.5) saturate(0);} }
+  @keyframes splat { to { transform: scale(1.7,.05); opacity: 0; } }
+  .slime-body {
+    position: relative; margin: 0 auto;
+    background: radial-gradient(circle at 35% 28%, #b8f77a, #58c93a 60%, #2e8a1e);
+    border-radius: 52% 52% 46% 46% / 62% 62% 40% 40%;
+    box-shadow: inset -6px -10px 18px rgba(0,0,0,.25), 0 10px 12px rgba(0,0,0,.45);
+    animation: wobble 1.6s ease-in-out infinite;
+  }
+  @keyframes wobble {
+    0%,100% { transform: scale(1,1);} 50% { transform: scale(1.07,.93);}
+  }
+  .slime-body .eye { position: absolute; background: #143307; border-radius: 50%; }
+  .slime-body .mouth { position: absolute; left: 50%; transform: translateX(-50%); background: #143307; border-radius: 0 0 10px 10px; }
+  .s-small .slime-body { width: 74px; height: 60px; }
+  .s-small .eye { width: 9px; height: 12px; top: 21px; } .s-small .eye.l { left: 21px; } .s-small .eye.r { right: 21px; }
+  .s-small .mouth { top: 38px; width: 13px; height: 6px; }
+  #slime1 { right: 30%; bottom: 26%; } #slime2 { right: 17%; bottom: 34%; } #slime3 { right: 8%; bottom: 20%; }
+
+  /* 슬라임킹 */
+  #king { right: 10%; bottom: 20%; z-index: 4; }
+  #king .slime-body { width: 170px; height: 136px; background: radial-gradient(circle at 35% 28%, #9ae0ff, #3a9ac9 60%, #1e5a8a); }
+  #king .eye { width: 18px; height: 25px; top: 47px; } #king .eye.l { left: 48px; } #king .eye.r { right: 48px; }
+  #king .mouth { top: 86px; width: 30px; height: 12px; }
+  #king .crown { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); font-size: 38px; filter: drop-shadow(0 3px 4px rgba(0,0,0,.5)); }
+  #king.attack .slime-body { animation: kingLunge .5s; }
+  @keyframes kingLunge { 0%,100% { transform: none;} 40% { transform: translateX(-70px) scale(1.1,.95);} }
+
+  .name-tag { margin-top: 6px; font-size: 13px; font-weight: 800; color: #e8e2ff; text-shadow: 0 2px 4px #000; }
+  .hp-bar { width: 90px; height: 10px; margin: 5px auto 0; background: #1a1428; border: 2px solid #4a3f6e; border-radius: 8px; overflow: hidden; }
+  #king .hp-bar { width: 150px; height: 13px; }
+  .hp-fill { height: 100%; width: 100%; border-radius: 6px; transition: width .3s ease-out; background: linear-gradient(180deg, #7cf76a, #2fae2f); }
+  .hp-fill.low { background: linear-gradient(180deg, #ff9a6a, #e04a2f); }
+  .hp-num { font-size: 10px; color: #9c92c4; margin-top: 2px; }
+
+  /* ── 예준 그림 자동 장착 (character/, skill/ 폴더에 파일 넣으면 교체됨) ── */
+  img.art { display: none; pointer-events: none; }
+  .has-art .css-art { display: none !important; }
+  .has-art img.art { display: block; margin: 0 auto; }
+  #legend-sprite img.art { height: 122px; }
+  .s-small img.art { height: 64px; animation: wobble 1.6s ease-in-out infinite; }
+  #king img.art { height: 140px; animation: wobble 1.6s ease-in-out infinite; }
+  .slime-unit.dead img.art { animation: splat .45s forwards; }
+
+  /* ── 이펙트 ── */
+  .dmg {
+    position: absolute; font-size: 34px; font-weight: 900; color: #ffd94a;
+    text-shadow: 0 3px 0 #7a4a00, 0 0 14px rgba(255,200,60,.6);
+    animation: dmgFly .9s ease-out forwards; pointer-events: none; z-index: 20;
+  }
+  .dmg.crit { font-size: 48px; color: #ff5a3c; text-shadow: 0 3px 0 #6e0f00, 0 0 18px rgba(255,90,60,.7); }
+  .dmg.tickle { font-size: 22px; color: #9c92c4; }
+  .dmg.ult { font-size: 64px; color: #7ce8ff; text-shadow: 0 4px 0 #0a4a6e, 0 0 26px rgba(120,220,255,.9); }
+  @keyframes dmgFly { 0% { opacity: 0; transform: translateY(0) scale(.5);} 15% { opacity: 1; transform: translateY(-22px) scale(1.25);} 100% { opacity: 0; transform: translateY(-80px) scale(1);} }
+
+  .bolt { position: absolute; font-size: 70px; z-index: 15; animation: boltDrop .35s ease-in forwards; pointer-events: none; filter: drop-shadow(0 0 16px rgba(255,240,120,.9)); }
+  @keyframes boltDrop { from { opacity: 0; transform: translateY(-110px) scale(.6);} 60% { opacity: 1; transform: translateY(0) scale(1.15);} to { opacity: 0; transform: translateY(6px) scale(1);} }
+
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 60; }
+  #flash.on { animation: flashFx .7s; }
+  @keyframes flashFx { 0% { opacity: 0;} 15% { opacity: 1;} 100% { opacity: 0;} }
+  #ult-bolt { position: absolute; left: 0; right: 0; top: 0; bottom: 0; display: none; align-items: center; justify-content: center; font-size: 160px; z-index: 55; pointer-events: none; filter: drop-shadow(0 0 40px #7ce8ff); }
+  #ult-bolt.on { display: flex; animation: ultIn .8s; }
+  @keyframes ultIn { 0% { transform: scale(3); opacity: 0;} 30% { transform: scale(1); opacity: 1;} 100% { opacity: 0;} }
+
+  /* ── 변신 이펙트: 6분할 360도 방사 (예준 기획) ── */
+  .burst-holder { position: absolute; left: 50%; top: 45%; z-index: 56; pointer-events: none; }
+  .burst-inner { animation: burstFly .95s ease-out forwards; filter: drop-shadow(0 0 18px rgba(255,150,50,.9)); }
+  .burst-inner img { height: 84px; display: block; }
+  .burst-inner.emoji { font-size: 64px; }
+  @keyframes burstFly {
+    0% { transform: translateY(-10px) scale(.3); opacity: 0; }
+    15% { opacity: 1; }
+    100% { transform: translateY(-200px) scale(1.15); opacity: 0; }
+  }
+
+  /* ── 대화창 (가로: 왼쪽 아래) ── */
+  #dialogue {
+    position: absolute; left: 12px; right: 190px; bottom: 12px; z-index: 45;
+    padding: 12px 16px 18px; min-height: 74px;
+    background: linear-gradient(180deg, #241d3d, #1a142e);
+    border: 3px solid #5a4d8a; border-radius: 14px; cursor: pointer;
+    box-shadow: 0 8px 20px rgba(0,0,0,.5);
+  }
+  #speaker { display: inline-block; margin-top: -26px; margin-bottom: 4px; padding: 3px 12px; font-size: 13px; font-weight: 800; color: #2b1c05; background: linear-gradient(180deg,#ffe9a0,#f0a93a); border-radius: 10px; box-shadow: 0 3px 8px rgba(0,0,0,.4); }
+  #dtext { color: #f0ecff; font-size: 15px; line-height: 1.5; min-height: 24px; }
+  #next-hint { position: absolute; right: 12px; bottom: 6px; color: #f5b53f; font-size: 12px; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+
+  /* ── 버튼 (가로: 오른쪽 아래) ── */
+  #controls { position: absolute; right: 12px; bottom: 12px; z-index: 45; display: flex; flex-direction: column; gap: 10px; width: 164px; }
+  .battle-btn {
+    display: none; padding: 14px; font-size: 19px; font-weight: 900; color: #fff;
+    border: none; border-radius: 14px; cursor: pointer;
+  }
+  .battle-btn.on { display: block; animation: pulse 1s infinite; }
+  .battle-btn:disabled { filter: grayscale(1) brightness(.6); animation: none; }
+  #atk-btn { background: linear-gradient(180deg, #ff7a4d, #d63920); box-shadow: 0 5px 0 #7e1a0a, 0 10px 20px rgba(0,0,0,.5); }
+  #atk-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #7e1a0a; }
+  #ult-btn { background: linear-gradient(180deg, #6fd9ff, #1e78d6); box-shadow: 0 5px 0 #0a3a7e, 0 0 24px rgba(110,200,255,.5); }
+  #ult-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #0a3a7e; }
+
+  /* ── 특수스킬 게이지 (롤 스타일: 평타·시간으로 충전) ── */
+  #gauge-wrap { display: none; }
+  #gauge-wrap.on { display: block; }
+  #gauge-label { display: flex; justify-content: space-between; color: #9fdcff; font-size: 12px; font-weight: 800; margin-bottom: 4px; text-shadow: 0 1px 3px #000; }
+  #gauge-bar { height: 14px; background: #101726; border: 2px solid #2b4a7e; border-radius: 9px; overflow: hidden; }
+  #gauge-fill { height: 100%; width: 0%; border-radius: 6px; transition: width .3s ease-out; background: linear-gradient(90deg, #1e78d6, #6fd9ff); }
+  #gauge-wrap.full #gauge-bar { border-color: #7ce8ff; box-shadow: 0 0 14px rgba(110,220,255,.7); }
+  #gauge-wrap.full #gauge-fill { animation: gaugeGlow .8s ease-in-out infinite alternate; }
+  @keyframes gaugeGlow { from { filter: brightness(1); } to { filter: brightness(1.6); } }
+
+  /* ── 뽑기 / 도감 화면 ── */
+  .sub-screen {
+    position: absolute; inset: 0; z-index: 70; display: none;
+    flex-direction: column; align-items: center;
+    background: radial-gradient(ellipse at 50% 30%, #2a1f4d 0%, #0d0b14 70%);
+  }
+  .sub-screen.on { display: flex; }
+  .sub-head { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; }
+  .back-btn { background: #241d3d; color: #e8e2ff; border: 2px solid #5a4d8a; border-radius: 10px; padding: 8px 14px; font-weight: 800; font-size: 14px; cursor: pointer; }
+  .sub-title { font-size: 20px; font-weight: 900; color: #ffe9a0; }
+  .ticket-chip { background: #241d3d; border: 2px solid #5a4d8a; border-radius: 10px; padding: 6px 12px; color: #ffd94a; font-weight: 800; font-size: 13px; }
+  .menu-btn { padding: 10px 22px; font-size: 16px; font-weight: 800; color: #e8e2ff; background: #241d3d; border: 2px solid #5a4d8a; border-radius: 12px; cursor: pointer; }
+  .menu-btn:active { transform: translateY(2px); }
+
+  #gacha-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+  #pickup-banner {
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+    background: linear-gradient(90deg, #2a2240, #1a142e);
+    border: 2px solid #ffd94a; border-radius: 14px;
+    box-shadow: 0 0 18px rgba(255,217,74,.3);
+    animation: bannerGlow 1.6s ease-in-out infinite alternate;
+  }
+  @keyframes bannerGlow { from { box-shadow: 0 0 10px rgba(255,217,74,.2);} to { box-shadow: 0 0 24px rgba(255,217,74,.5);} }
+  #pickup-img { height: 52px; }
+  #summon-circle {
+    width: 128px; height: 128px; border-radius: 50%; border: 4px dashed #7a6ab8;
+    display: flex; align-items: center; justify-content: center; font-size: 54px; transition: border-color .2s;
+  }
+  #summon-circle.rumble { animation: rumble .14s infinite; border-color: #ffd94a; box-shadow: 0 0 30px rgba(255,217,74,.45); }
+  #summon-circle.legendary { border-color: #ff7a4d; box-shadow: 0 0 50px rgba(255,150,60,.8); animation-duration: .08s; }
+  @keyframes rumble { 0%,100% { transform: rotate(-3deg) scale(1.03);} 50% { transform: rotate(3deg) scale(.97);} }
+  #gacha-result { display: none; flex-direction: column; align-items: center; }
+  #gacha-result.on { display: flex; animation: cardPop .5s cubic-bezier(.2,2,.4,1); }
+  @keyframes cardPop { from { transform: scale(.2) rotate(-8deg); opacity: 0;} to { transform: none; opacity: 1;} }
+  #result-card { width: 176px; padding: 14px; border-radius: 16px; text-align: center; background: #1a142e; border: 3px solid #8f86b5; }
+  #result-card.rank-희귀 { border-color: #4aa8ff; box-shadow: 0 0 20px rgba(74,168,255,.45); }
+  #result-card.rank-영웅 { border-color: #b06aff; box-shadow: 0 0 24px rgba(176,106,255,.55); }
+  #result-card.rank-전설 { border-color: #ffd94a; box-shadow: 0 0 34px rgba(255,217,74,.75); background: linear-gradient(180deg, #2a2240, #1a142e); }
+  #result-card img { max-width: 122px; max-height: 108px; }
+  .mini-slime { width: 84px; height: 66px; margin: 0 auto; background: radial-gradient(circle at 35% 28%, #b8f77a, #58c93a 60%, #2e8a1e); border-radius: 52% 52% 46% 46% / 62% 62% 40% 40%; }
+  .mini-king { background: radial-gradient(circle at 35% 28%, #9ae0ff, #3a9ac9 60%, #1e5a8a); }
+  #gacha-msg { color: #9c92c4; font-size: 13px; min-height: 18px; }
+  #pull-btn {
+    margin-bottom: 24px; padding: 15px 44px; font-size: 20px; font-weight: 900; color: #2b1c05;
+    background: linear-gradient(180deg, #ffe9a0, #f0a93a); border: none; border-radius: 14px;
+    box-shadow: 0 5px 0 #8a5a14; cursor: pointer;
+  }
+  #pull-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #8a5a14; }
+  #pull-btn:disabled { filter: grayscale(.8) brightness(.6); }
+  #rate-info { color: #6c6394; font-size: 11px; padding-bottom: 8px; }
+
+  #dex-grid { flex: 1; display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 10px; }
+  .dex-card { width: 142px; padding: 12px; border-radius: 14px; background: #1a142e; border: 3px solid #5a4d8a; text-align: center; color: #e8e2ff; }
+  .dex-card.locked { filter: grayscale(1) brightness(.55); }
+  .dex-card img { max-width: 100px; max-height: 88px; }
+  .dex-count { font-size: 12px; color: #9c92c4; }
+  #dex-progress { padding-bottom: 20px; color: #ffd94a; font-weight: 800; }
+
+  /* ── 정룡술사 변신 상태 ── */
+  #gauge-wrap.trans #gauge-fill { background: linear-gradient(90deg, #f0a93a, #ffe9a0); }
+  #gauge-wrap.trans #gauge-label { color: #ffd94a; }
+  #legend-sprite.ascended { filter: drop-shadow(0 0 26px rgba(255,120,40,.85)) drop-shadow(0 8px 10px rgba(0,0,0,.5)); }
+  #legend.trans #legend-sprite img.art { height: 148px; }
+  #legend.trans #aura { animation-duration: 2.2s; }
+</style>
+</head>
+<body>
+<div id="rotate-overlay">
+  <div class="phone">📱</div>
+  <div>폰을 옆으로 돌려줘!</div>
+  <div style="font-size:13px;color:#8f86b5">던전G는 가로 게임이야</div>
+</div>
+
+<div id="game">
+
+  <!-- 타이틀 -->
+  <div id="title-screen">
+    <div class="torch" style="top:16%; left:16%">🔥</div>
+    <div class="torch" style="top:16%; right:16%; animation-delay:.4s">🔥</div>
+    <div id="game-logo">던전<span class="g">G</span></div>
+    <div id="title-sub">G의 정체는... 비밀이다</div>
+    <button id="start-btn">모험 시작</button>
+    <div style="display:flex; gap:10px;">
+      <button class="menu-btn" id="gacha-open">🎰 뽑기</button>
+      <button class="menu-btn" id="dex-open">📖 도감</button>
+    </div>
+    <div class="ticket-chip ticket-view"></div>
+    <div id="title-studio">구예준 스튜디오</div>
+  </div>
+
+  <!-- 전투 -->
+  <div id="battle-screen">
+    <div class="brick"></div>
+    <div id="dungeon-name">— 튜토리얼 던전 —</div>
+    <div class="note">※ 그림은 임시! 예준이 그림으로 교체 예정</div>
+    <div id="arena">
+
+      <!-- 전설 캐릭터 (대여) -->
+      <div class="fighter" id="legend" style="opacity:0">
+        <div id="aura"></div>
+        <div id="legend-sprite">
+          <div class="cape css-art"></div>
+          <div class="head css-art"></div>
+          <div class="body css-art"></div>
+          <img class="art" alt="">
+        </div>
+        <div class="legend-rank">★★★★★ 전설</div>
+        <div class="legend-tag" id="legend-name">드래베오 (대여중)</div>
+      </div>
+
+      <!-- 슬라임 3마리 -->
+      <div class="fighter slime-unit s-small" id="slime1">
+        <div class="slime-body css-art"><div class="eye l"></div><div class="eye r"></div><div class="mouth"></div></div>
+        <img class="art" alt="">
+        <div class="name-tag">슬라임</div>
+        <div class="hp-bar"><div class="hp-fill"></div></div>
+      </div>
+      <div class="fighter slime-unit s-small" id="slime2">
+        <div class="slime-body css-art"><div class="eye l"></div><div class="eye r"></div><div class="mouth"></div></div>
+        <img class="art" alt="">
+        <div class="name-tag">슬라임</div>
+        <div class="hp-bar"><div class="hp-fill"></div></div>
+      </div>
+      <div class="fighter slime-unit s-small" id="slime3">
+        <div class="slime-body css-art"><div class="eye l"></div><div class="eye r"></div><div class="mouth"></div></div>
+        <img class="art" alt="">
+        <div class="name-tag">슬라임</div>
+        <div class="hp-bar"><div class="hp-fill"></div></div>
+      </div>
+
+      <!-- 슬라임킹 -->
+      <div class="fighter slime-unit" id="king">
+        <div class="slime-body css-art"><div class="crown">👑</div><div class="eye l"></div><div class="eye r"></div><div class="mouth"></div></div>
+        <img class="art" alt="">
+        <div class="name-tag">슬라임킹</div>
+        <div class="hp-bar"><div class="hp-fill" id="king-hp"></div></div>
+        <div class="hp-num" id="king-hp-num">5000 / 5000</div>
+      </div>
+
+      <div id="ult-bolt">🐉</div>
+    </div>
+
+    <div id="dialogue">
+      <span id="speaker">안내</span>
+      <div id="dtext"></div>
+      <div id="next-hint">▼ 터치</div>
+    </div>
+    <div id="controls">
+      <div id="gauge-wrap">
+        <div id="gauge-label"><span>⚡ 특수스킬</span><span id="gauge-pct">0%</span></div>
+        <div id="gauge-bar"><div id="gauge-fill"></div></div>
+      </div>
+      <button class="battle-btn" id="atk-btn">⚔️ 공격</button>
+      <button class="battle-btn" id="ult-btn">🐉 변신</button>
+    </div>
+    <div id="flash"></div>
+  </div>
+
+  <!-- 뽑기 -->
+  <div id="gacha-screen" class="sub-screen">
+    <div class="sub-head">
+      <button class="back-btn">← 뒤로</button>
+      <div class="sub-title">🎰 뽑기</div>
+      <div class="ticket-chip ticket-view"></div>
+    </div>
+    <div id="gacha-stage">
+      <div id="pickup-banner">
+        <img id="pickup-img" alt="">
+        <div>
+          <div style="font-size:11px; color:#ff9a5a; font-weight:900; letter-spacing:1px;">PICK UP!</div>
+          <div style="font-weight:900; color:#ffe9a0;">★★★★★ 드래베오</div>
+          <div style="font-size:11px; color:#9c92c4;">"나를 갖고 싶다면... 뽑아라."</div>
+        </div>
+      </div>
+      <div id="summon-circle">🎁</div>
+      <div id="gacha-result"><div id="result-card"></div></div>
+      <div id="gacha-msg"></div>
+    </div>
+    <div id="rate-info">확률: 희귀 70% · 영웅 27% · 전설 ??? (비밀) — 아군만 나옵니다</div>
+    <button id="pull-btn">뽑기! (🎟️ 1장)</button>
+  </div>
+
+  <!-- 도감 -->
+  <div id="dex-screen" class="sub-screen">
+    <div class="sub-head">
+      <button class="back-btn">← 뒤로</button>
+      <div class="sub-title">📖 도감</div>
+      <div class="ticket-chip ticket-view"></div>
+    </div>
+    <div id="dex-grid"></div>
+    <div id="dex-progress"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let busy = false;
+
+// ── 예준 그림 자동 로더 ──
+// character/, skill/ 폴더에 정해진 이름의 파일이 있으면 임시 그림 대신 사용
+const ART = {};
+function loadArt(slot, base, cb) {
+  const exts = ['png', 'PNG', 'jpg', 'JPG', 'jpeg', 'webp'];
+  let i = 0;
+  const probe = new Image();
+  probe.onload = () => { ART[slot] = probe.src; if (cb) cb(probe.src); };
+  probe.onerror = () => { if (i < exts.length) probe.src = base + '.' + exts[i++]; };
+  probe.src = base + '.' + exts[i++];
+}
+loadArt('legend', 'character/legend', src => {
+  const sp = $('legend-sprite');
+  sp.querySelector('img.art').src = src;
+  sp.classList.add('has-art');
+});
+loadArt('slime', 'character/slime', src => {
+  document.querySelectorAll('.slime-unit.s-small').forEach(u => {
+    u.querySelector('img.art').src = src;
+    u.classList.add('has-art');
+  });
+});
+loadArt('king', 'character/king', src => {
+  $('king').querySelector('img.art').src = src;
+  $('king').classList.add('has-art');
+});
+loadArt('legend2', 'character/legend2'); // 정룡술사 폼 (변신 시 사용)
+loadArt('priest', 'character/priest');   // 첫사랑성직자 (뽑기·도감)
+// 아군 (뽑기 풀)
+loadArt('josun', 'character/josun');       // 조슨대왕 — 신하 소환 어태커
+loadArt('wolf', 'character/wolf');         // 백울프 — 확률 스턴
+// 아이템 (강화·보상 시스템에서 사용 예정)
+loadArt('candy', 'character/candy');       // 별사탕 — 업그레이드 재화
+loadArt('chest', 'character/chest');       // 던전 클리어 상자
+// 던전 몬스터 (던전 시스템에서 사용 예정)
+loadArt('bat', 'character/bat');           // 박쥐 — 고난이도에서 아군 공격력 흡수
+loadArt('mushroom', 'character/mushroom'); // 독버섯
+loadArt('tree', 'character/tree');         // 화가 난 나무
+loadArt('map', 'character/map', src => { // 던전 맵 (예준 그림) — 전투 배경으로
+  const bs = $('battle-screen');
+  bs.style.backgroundImage = 'linear-gradient(rgba(13,11,20,.30), rgba(13,11,20,.55)), url("' + src + '")';
+  bs.style.backgroundSize = 'cover';
+  bs.style.backgroundPosition = 'center';
+  bs.classList.add('has-map');
+});
+loadArt('attack', 'character/attack');
+loadArt('ult', 'character/ult'); // 전용 변신 이펙트 (그리면 6분할 방사에 자동 사용)
+
+// 변신 이펙트: 가운데서 6갈래 360도로 뻗어나감 (예준 기획, 추후 그림 교체 가능)
+function spawnUltBurst() {
+  const art = ART.ult || ART.attack; // 전용 이펙트 > 불꽃 참격 > 🔥
+  for (let i = 0; i < 6; i++) {
+    const holder = document.createElement('div');
+    holder.className = 'burst-holder';
+    holder.style.transform = 'translate(-50%,-50%) rotate(' + (i * 60) + 'deg)';
+    const inner = document.createElement('div');
+    inner.className = 'burst-inner' + (art ? '' : ' emoji');
+    if (art) {
+      const im = document.createElement('img');
+      im.src = art;
+      inner.appendChild(im);
+    } else {
+      inner.textContent = '🔥';
+    }
+    holder.appendChild(inner);
+    $('arena').appendChild(holder);
+    setTimeout(() => holder.remove(), 1100);
+  }
+}
+
+const king = { hp: 5000, max: 5000 };
+let slimesLeft = 3;
+let phase = 'intro'; // intro → wave → kingIntro → kingFight → ult → victory
+
+// ── 특수스킬 게이지 (예준 기획: 롤처럼 평타로 차고, 시간으로도 조금씩) ──
+const GAUGE_PER_HIT = 22;    // 평타 1대당 충전량
+const GAUGE_PER_SEC = 3;     // 초당 자동 충전량
+const TRANSFORM_SEC = 60;    // 정룡술사 지속시간 1분 (예준 확정)
+const TRANSFORM_DMG = 1.6;   // 변신 시 평타 1.6배 (이속 +10%는 이동 시스템 생기면 적용)
+let gauge = 0, transformed = false, ultQueued = false, kingHits = 0;
+
+function updateGaugeUI() {
+  $('gauge-fill').style.width = gauge + '%';
+  $('gauge-pct').textContent = Math.floor(gauge) + '%';
+  $('gauge-wrap').classList.toggle('full', !transformed && gauge >= 100);
+}
+function addGauge(n) {
+  if (transformed || ultQueued) return;
+  gauge = Math.min(100, gauge + n);
+  updateGaugeUI();
+}
+// 게이지 풀 + 킹전투 중이면 변신 해금
+function maybeUlt() {
+  // 킹을 최소 1대는 때려봐야 해금 (반격 개그 장면 보장)
+  if (phase !== 'kingFight' || ultQueued || transformed || busy || gauge < 100 || kingHits < 1) return false;
+  ultQueued = true;
+  $('atk-btn').classList.remove('on');
+  openDialogue(ultLines);
+  return true;
+}
+// 드래베오 → 정룡술사 변신 (예준 기획: 평타 1.6배, 1분 지속 후 재충전)
+function doTransform() {
+  transformed = true; ultQueued = false;
+  gauge = 100; // 이제부터는 남은 변신 시간 게이지
+  const sp = $('legend-sprite');
+  if (ART.legend2) { sp.querySelector('img.art').src = ART.legend2; sp.classList.add('has-art'); }
+  sp.classList.add('ascended');
+  $('legend').classList.add('trans');
+  $('legend-name').textContent = '정룡술사 드래베오 (대여중)';
+  $('gauge-wrap').classList.add('trans');
+  document.querySelector('#gauge-label span').textContent = '🐉 변신 지속';
+  updateGaugeUI();
+}
+function revertForm() {
+  transformed = false;
+  const sp = $('legend-sprite');
+  if (ART.legend) sp.querySelector('img.art').src = ART.legend;
+  else sp.classList.remove('has-art');
+  sp.classList.remove('ascended');
+  $('legend').classList.remove('trans');
+  $('legend-name').textContent = '드래베오 (대여중)';
+  $('gauge-wrap').classList.remove('trans');
+  document.querySelector('#gauge-label span').textContent = '⚡ 특수스킬';
+  gauge = 0; updateGaugeUI(); // 다시 차면 재변신 가능
+}
+setInterval(() => {
+  if (phase === 'intro') return;
+  if (transformed) {
+    gauge = Math.max(0, gauge - 100 / TRANSFORM_SEC);
+    updateGaugeUI();
+    if (gauge <= 0) revertForm();
+  } else {
+    addGauge(GAUGE_PER_SEC);
+    maybeUlt();
+  }
+}, 1000);
+
+// ── 시나리오 (기획: 구예준 / 톤: 병맛) ──
+const introLines = [
+  { who: '안내', text: '던전G에 온 것을 환영합니다!' },
+  { who: '안내', text: '튜토리얼 특전! 전설 캐릭터를 잠깐 빌려드립니다.', onShow: summonLegend },
+  { who: '드래베오', text: '...누가 감히 나를 소환했지?' },
+  { who: '안내', text: '(대여 시간: 3분. 소중히 다뤄주세요.)' },
+  { who: '안내', text: '앗! 슬라임 무리가 나타났다!', onShow: showSlimes },
+  { who: '안내', text: '평타를 때리면 ⚡ 특수스킬 게이지가 차오릅니다! 시간이 지나도 조금씩 차요.' },
+  { who: '안내', text: '게이지가 다 차면... 굉장한 일이 벌어집니다.' },
+  { who: '안내', text: '공격을 눌러 전설의 힘을 맛보세요!', end: 'wave' },
+];
+const kingLines = [
+  { who: '안내', text: '슬라임킹이 나타났다!! 체력이 5000이나 된다!' },
+  { who: '드래베오', text: '오... 조금은 운동이 되겠군.' },
+  { who: '안내', text: '계속 공격하세요!', end: 'kingFight' },
+];
+const ultLines = [
+  { who: '드래베오', text: '간지럽군. ...이제 진짜 모습을 보여주지.' },
+  { who: '안내', text: '게이지 완충! 🐉 변신 버튼을 누르면 정룡술사가 됩니다!', end: 'ult' },
+];
+const victoryLines = [
+  { who: '안내', text: '슬라임킹을 물리쳤다! 이것이 정룡술사의 힘...!' },
+  { who: '안내', text: '...대여 시간이 종료되었습니다.', onShow: recallLegend },
+  { who: '드래베오', text: '나를 갖고 싶다면... 뽑기에서 찾아라. (휘리릭)' },
+  { who: '안내', text: '드래베오는 뽑기에서 만날 수 있습니다. 확률: 비밀' },
+  { who: '안내', text: '클리어 보상: 🎟️ 뽑기권 3장! 첫 화면의 🎰 뽑기에서 쓸 수 있습니다.', onShow: () => grantTickets() },
+  { who: '개발자', text: '던전을 깰 때마다 뽑기권을 받습니다. 드래베오가 나올 때까지... — 구예준 스튜디오', end: 'restart' },
+];
+
+let lines = introLines, idx = -1;
+
+function nextLine() {
+  if (busy) return;
+  idx++;
+  if (idx >= lines.length) return;
+  const l = lines[idx];
+  $('speaker').textContent = l.who;
+  typeText(l.text);
+  if (l.onShow) l.onShow();
+  if (l.end === 'wave' || l.end === 'kingFight') {
+    phase = l.end;
+    lockDialogue();
+    $('gauge-wrap').classList.add('on');
+    setTimeout(() => { const b = $('atk-btn'); b.classList.add('on'); b.disabled = false; }, 500);
+  }
+  if (l.end === 'ult') {
+    phase = 'ult';
+    lockDialogue();
+    setTimeout(() => { const b = $('ult-btn'); b.classList.add('on'); b.disabled = false; }, 500);
+  }
+  if (l.end === 'restart') {
+    $('next-hint').textContent = '▼ 처음으로';
+    $('dialogue').onclick = () => location.reload();
+  }
+}
+function lockDialogue() { $('dialogue').style.pointerEvents = 'none'; $('next-hint').style.display = 'none'; }
+function openDialogue(newLines) {
+  lines = newLines; idx = -1;
+  $('dialogue').style.pointerEvents = '';
+  $('next-hint').style.display = '';
+  nextLine();
+}
+
+let typeTimer;
+function typeText(text) {
+  clearInterval(typeTimer);
+  const el = $('dtext'); el.textContent = '';
+  let i = 0;
+  typeTimer = setInterval(() => {
+    el.textContent = text.slice(0, ++i);
+    if (i >= text.length) clearInterval(typeTimer);
+  }, 26);
+}
+
+function summonLegend() {
+  const L = $('legend');
+  $('flash').classList.add('on');
+  setTimeout(() => $('flash').classList.remove('on'), 700);
+  L.style.transition = 'opacity .6s';
+  L.style.opacity = 1;
+}
+function showSlimes() {
+  ['slime1','slime2','slime3'].forEach((id, i) => setTimeout(() => $(id).classList.add('show'), i * 180));
+}
+function recallLegend() { $('legend').classList.add('gone'); }
+
+function popDmg(targetEl, txt, cls) {
+  const d = document.createElement('div');
+  d.className = 'dmg ' + (cls || '');
+  d.textContent = txt;
+  const box = targetEl.getBoundingClientRect(), arena = $('arena').getBoundingClientRect();
+  d.style.left = (box.left - arena.left + box.width / 2 - 30 + (Math.random() * 40 - 20)) + 'px';
+  d.style.top  = (box.top - arena.top - 16) + 'px';
+  $('arena').appendChild(d);
+  setTimeout(() => d.remove(), 900);
+}
+function dropBolt(targetEl) {
+  const b = document.createElement(ART.attack ? 'img' : 'div');
+  b.className = 'bolt';
+  if (ART.attack) { b.src = ART.attack; b.style.height = '90px'; }
+  else { b.textContent = '⚡'; }
+  const box = targetEl.getBoundingClientRect(), arena = $('arena').getBoundingClientRect();
+  b.style.left = (box.left - arena.left + box.width / 2 - 35) + 'px';
+  b.style.top  = (box.top - arena.top - 20) + 'px';
+  $('arena').appendChild(b);
+  setTimeout(() => b.remove(), 400);
+}
+
+// ── 공격 ──
+$('atk-btn').onclick = () => {
+  if (busy) return;
+  busy = true; $('atk-btn').disabled = true;
+  $('legend').classList.add('lunge');
+
+  setTimeout(() => {
+    $('legend').classList.remove('lunge');
+
+    if (phase === 'wave') {
+      const target = $('slime' + (4 - slimesLeft));
+      dropBolt(target);
+      setTimeout(() => {
+        const dmg = 800 + Math.floor(Math.random() * 400);
+        addGauge(GAUGE_PER_HIT);
+        popDmg(target, dmg, 'crit');
+        target.classList.add('hurt');
+        target.querySelector('.hp-fill').style.width = '0%';
+        $('arena').classList.add('shake');
+        setTimeout(() => { target.classList.add('dead'); $('arena').classList.remove('shake'); }, 250);
+        slimesLeft--;
+        busy = false;
+        if (slimesLeft > 0) {
+          $('atk-btn').disabled = false;
+        } else {
+          $('atk-btn').classList.remove('on');
+          setTimeout(showKing, 800);
+        }
+      }, 300);
+    }
+
+    else if (phase === 'kingFight') {
+      dropBolt($('king'));
+      setTimeout(() => {
+        let dmg = 900 + Math.floor(Math.random() * 300);
+        if (transformed) dmg = Math.round(dmg * TRANSFORM_DMG); // 정룡술사: 평타 1.6배
+        king.hp -= dmg;
+        kingHits++;
+        addGauge(GAUGE_PER_HIT);
+        setKingHp();
+        popDmg($('king'), dmg, transformed ? 'ult' : 'crit');
+        $('king').classList.add('hurt');
+        $('arena').classList.add('shake');
+        setTimeout(() => { $('king').classList.remove('hurt'); $('arena').classList.remove('shake'); }, 300);
+
+        // 킹 처치 → 승리
+        if (king.hp <= 0) {
+          setTimeout(() => {
+            $('king').classList.add('dead');
+            $('atk-btn').classList.remove('on');
+            busy = false;
+            setTimeout(() => openDialogue(victoryLines), 700);
+          }, 450);
+          return;
+        }
+
+        // 킹의 반격 → 데미지 1 (간지러움)
+        setTimeout(() => {
+          $('king').classList.add('attack');
+          setTimeout(() => {
+            $('king').classList.remove('attack');
+            popDmg($('legend'), '1', 'tickle');
+            busy = false;
+            if (!maybeUlt()) {
+              $('atk-btn').disabled = false;
+            }
+          }, 400);
+        }, 350);
+      }, 300);
+    }
+
+    else {
+      // 예상 밖 단계에서 눌리면 잠금 해제 (busy 데드락 방지)
+      busy = false;
+      $('atk-btn').disabled = false;
+    }
+  }, 160);
+};
+
+// ── 필살기 ──
+// 🐉 변신 버튼 (예준 기획: 필살기 = 정룡술사 변신)
+$('ult-btn').onclick = () => {
+  if (busy) return;
+  busy = true; $('ult-btn').disabled = true; $('ult-btn').classList.remove('on');
+
+  $('flash').classList.add('on');
+  spawnUltBurst();
+  $('arena').classList.add('shake');
+  setTimeout(() => {
+    $('flash').classList.remove('on');
+    $('arena').classList.remove('shake');
+    doTransform();
+    phase = 'kingFight'; // 변신 후 평타 전투 계속 (안 돌리면 공격 분기가 안 탐)
+    busy = false;
+    // 변신 후 평타 재개 (1.6배)
+    const b = $('atk-btn'); b.classList.add('on'); b.disabled = false;
+    $('speaker').textContent = '안내';
+    typeText('정룡술사로 변신! 평타 1.6배 + 이속 10%! 마저 쓸어버리세요!');
+  }, 700);
+};
+
+function showKing() {
+  phase = 'kingIntro';
+  $('king').classList.add('show');
+  openDialogue(kingLines);
+}
+function setKingHp() {
+  const pct = Math.max(0, king.hp / king.max * 100);
+  const f = $('king-hp');
+  f.style.width = pct + '%';
+  f.classList.toggle('low', pct < 35);
+  $('king-hp-num').textContent = Math.max(0, king.hp) + ' / ' + king.max;
+}
+
+// ── 뽑기 · 도감 (예준 기획: 드래베오를 뽑고 싶어서 던전을 돌게 만들기) ──
+const SAVE_KEY = 'dungeonG';
+let saveData = { tickets: 3, pulls: 0, coll: {} };
+try {
+  const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+  if (s && typeof s === 'object') saveData = Object.assign(saveData, s);
+} catch (e) {}
+function persist() { localStorage.setItem(SAVE_KEY, JSON.stringify(saveData)); }
+function refreshTickets() {
+  document.querySelectorAll('.ticket-view').forEach(el => el.textContent = '🎟️ 뽑기권 ' + saveData.tickets + '장');
+}
+function grantTickets() { saveData.tickets += 3; persist(); refreshTickets(); }
+
+// 뽑기 풀 = 아군 캐릭터만! (슬라임·슬라임킹은 적군이므로 제외 — 예준 지적으로 수정)
+const CHARS = [
+  { id: 'josun',   name: '조슨대왕',    rank: '희귀', stars: '★★★',    rate: 35, desc: '평타 2번마다 신하 1명 소환 공격' },
+  { id: 'wolf',    name: '백울프',      rank: '희귀', stars: '★★★',    rate: 35, desc: '일정 확률로 상대에게 스턴' },
+  { id: 'priest',  name: '첫사랑성직자', rank: '영웅', stars: '★★★★',  rate: 27, desc: '주술: 아군 공격력 2배 (10초)' },
+  { id: 'draebeo', name: '드래베오',    rank: '전설', stars: '★★★★★', rate: 3,  desc: '변신: 정룡술사 (평타 1.6배)' },
+];
+function charArt(id) {
+  const key = id === 'draebeo' ? 'legend' : id; // 드래베오만 파일명이 legend
+  if (ART[key]) return '<img src="' + ART[key] + '" alt="">';
+  return '<div style="font-size:64px">❓</div>';
+}
+
+let pulling = false;
+$('pull-btn').onclick = () => {
+  if (pulling) return;
+  if (saveData.tickets <= 0) {
+    $('gacha-msg').textContent = '뽑기권이 없어! 던전(모험 시작)을 깨면 3장씩 줍니다!';
+    return;
+  }
+  pulling = true;
+  saveData.tickets--; saveData.pulls++;
+  persist(); refreshTickets();
+
+  const r = Math.random() * 100;
+  // 전설 3% → 영웅 27% → 희귀 35%+35%
+  const pick = r < 3 ? CHARS[3] : r < 30 ? CHARS[2] : r < 65 ? CHARS[1] : CHARS[0];
+
+  $('gacha-result').classList.remove('on');
+  $('gacha-msg').textContent = '';
+  const circle = $('summon-circle');
+  circle.textContent = '✨';
+  circle.classList.add('rumble');
+  const legendary = pick.rank === '전설';
+  if (legendary) setTimeout(() => circle.classList.add('legendary'), 1200); // 전설은 뜸들이다 폭주
+
+  setTimeout(() => {
+    circle.classList.remove('rumble', 'legendary');
+    circle.textContent = '🎁';
+    const isNew = !saveData.coll[pick.id];
+    saveData.coll[pick.id] = (saveData.coll[pick.id] || 0) + 1;
+    persist();
+
+    const card = $('result-card');
+    card.className = 'rank-' + pick.rank;
+    card.innerHTML = charArt(pick.id) +
+      '<div style="font-weight:900;font-size:17px;color:#fff">' + pick.name + '</div>' +
+      '<div style="color:#ffd94a;font-size:13px">' + pick.stars + ' ' + pick.rank + '</div>' +
+      '<div style="font-size:12px;color:' + (isNew ? '#7cf76a' : '#9c92c4') + '">' + (isNew ? 'NEW! 도감 등록!' : '중복 +1') + '</div>';
+    $('gacha-result').classList.add('on');
+    if (legendary) $('gacha-msg').textContent = '"...다시 만났군." — 드래베오';
+    pulling = false;
+  }, legendary ? 2800 : 1400);
+};
+
+function renderDex() {
+  const owned = CHARS.filter(c => saveData.coll[c.id]).length;
+  $('dex-grid').innerHTML = CHARS.map(c => {
+    const n = saveData.coll[c.id] || 0;
+    return '<div class="dex-card' + (n ? '' : ' locked') + '">' + charArt(c.id) +
+      '<div style="font-weight:900">' + (n ? c.name : '???') + '</div>' +
+      '<div style="font-size:12px;color:#ffd94a">' + c.stars + ' ' + c.rank + '</div>' +
+      '<div style="font-size:11px;color:#9c92c4;min-height:14px">' + (n ? c.desc : '') + '</div>' +
+      '<div class="dex-count">' + (n ? '보유 ' + n : '미획득') + '</div></div>';
+  }).join('');
+  $('dex-progress').textContent = '도감 완성률 ' + Math.round(owned / CHARS.length * 100) + '%' +
+    (owned === CHARS.length ? ' — G의 비밀에 가까워지고 있다...' : '');
+}
+
+$('gacha-open').onclick = () => {
+  $('gacha-result').classList.remove('on');
+  $('gacha-msg').textContent = '';
+  if (ART.legend) $('pickup-img').src = ART.legend; // 픽업 배너에 드래베오 전시
+  refreshTickets();
+  $('gacha-screen').classList.add('on');
+};
+$('dex-open').onclick = () => { renderDex(); refreshTickets(); $('dex-screen').classList.add('on'); };
+document.querySelectorAll('.back-btn').forEach(b => b.onclick = () => b.closest('.sub-screen').classList.remove('on'));
+refreshTickets();
+
+$('start-btn').onclick = () => {
+  $('title-screen').style.display = 'none';
+  $('battle-screen').classList.add('on');
+  setTimeout(nextLine, 400);
+};
+$('dialogue').onclick = nextLine;
+</script>
+</body>
+</html>
