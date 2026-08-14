@@ -49,6 +49,13 @@
   #start-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #8a5a14; }
   @keyframes pulse { 0%,100% { transform: scale(1);} 50% { transform: scale(1.05);} }
 
+  /* ── 예준이 손그림 버튼 (img-btn 클래스가 붙으면 원래 버튼 껍데기를 지우고 그림만 보임) ── */
+  .img-btn { background: none; border: none; box-shadow: none; padding: 0; }
+  .img-btn img { display: block; height: 56px; filter: drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+  .img-btn:active img { transform: translateY(3px); }
+  #start-btn.img-btn img { height: 64px; }
+  .menu-btn.img-btn img { height: 46px; }
+
   /* ── 전투 (가로 레이아웃) ── */
   #battle-screen {
     position: absolute; inset: 0; display: none;
@@ -445,6 +452,14 @@ loadArt('king', 'character/king', src => {
   $('king').querySelector('img.art').src = src;
   $('king').classList.add('has-art');
 });
+// 손그림 버튼 (예준 그림) — 있으면 텍스트 버튼을 이미지 버튼으로 교체
+function swapBtnArt(el, src) {
+  el.innerHTML = '<img src="' + src + '" alt="">';
+  el.classList.add('img-btn');
+}
+loadArt('btnPlay', 'character/btn_play', src => swapBtnArt($('start-btn'), src));
+loadArt('btnGacha', 'character/btn_gacha', src => swapBtnArt($('gacha-open'), src));
+loadArt('btnDex', 'character/btn_dex', src => swapBtnArt($('dex-open'), src));
 loadArt('legend2', 'character/legend2'); // 정룡술사 폼 (변신 시 사용)
 loadArt('priest', 'character/priest');   // 첫사랑성직자 (뽑기·도감)
 // 아군 (뽑기 풀)
