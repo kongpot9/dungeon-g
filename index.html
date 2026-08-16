@@ -1049,7 +1049,9 @@ function openCharDetail(id) {
     $('cd-name').textContent = c.name;
     $('cd-rank').textContent = c.stars + ' ' + c.rank;
     $('cd-lv').textContent = 'Lv.' + lv + ' / 15' + (lv >= 15 ? ' 👑 만렙!' : '');
-    $('cd-stats').innerHTML = '⚔️ 공격력 ' + Math.round(h.atk * mult) + ' &nbsp;&nbsp; ❤️ 체력 ' + Math.round(h.hp * mult);
+    const at = ATTRS[h.attr || '무'];
+    $('cd-stats').innerHTML = '⚔️ 공격력 ' + Math.round(h.atk * mult * at.atk) + ' &nbsp;&nbsp; ❤️ 체력 ' + Math.round(h.hp * mult) +
+      '<br>' + at.icon + ' <b>' + at.name + '</b> — ' + at.desc;
     $('cd-skill').textContent = '✨ ' + c.desc;
     $('cd-story').textContent = '“' + c.story + '”';
     $('cd-actions').innerHTML = lv < 15
@@ -1087,11 +1089,18 @@ refreshTickets();
 // ═══════════ 스테이지 시스템 — 제1지역 즈은하시티 1-1~1-10 (기획: 구예준) ═══════════
 // 한 스테이지 = 길(세그먼트) 3~5개 반복 + 1-10은 슬라임킹 보스전
 
+// ── 속성 시스템 (예준 기획 2026-08-14): 상성표 대신 속성별 특성 ──
+const ATTRS = {
+  무: { icon: '⚪', name: '무속성', desc: '모든 스탯 1배의 무난함. 화·수속성 공격을 0.7배로 받음 (PvP에서 돋보임)', atk: 1, def: 1 },
+  화: { icon: '🔥', name: '화속성', desc: '공격 중 5% 확률로 데미지 2배!', atk: 1, def: 1, proc2x: 0.05 },
+  수: { icon: '💧', name: '수속성', desc: '수비력 1.3배, 대신 공격력 0.8배', atk: 0.8, def: 1.3 },
+  암: { icon: '🌑', name: '암속성', desc: '공격력 1.4배, 대신 방어력 0.7배', atk: 1.4, def: 0.7 },
+};
 const HEROES = {
-  draebeo: { name: '드래베오', atk: 120, hp: 300, skill: '🐉 변신', hasGauge: true },
-  priest:  { name: '첫사랑성직자', atk: 70, hp: 260, skill: '🔮 주술', hasGauge: true },
-  josun:   { name: '조슨대왕', atk: 85, hp: 280, skill: null, hasGauge: false }, // 패시브: 2타마다 신하 소환
-  wolf:    { name: '백울프', atk: 90, hp: 270, skill: null, hasGauge: false },   // 패시브: 25% 스턴
+  draebeo: { name: '드래베오', atk: 120, hp: 300, skill: '🐉 변신', hasGauge: true, attr: '화' },
+  priest:  { name: '첫사랑성직자', atk: 70, hp: 260, skill: '🔮 주술', hasGauge: true, attr: '무' },  // 속성: 예준 배정 대기
+  josun:   { name: '조슨대왕', atk: 85, hp: 280, skill: null, hasGauge: false, attr: '무' }, // 패시브: 2타마다 신하 소환 · 속성: 예준 배정 대기
+  wolf:    { name: '백울프', atk: 90, hp: 270, skill: null, hasGauge: false, attr: '무' },   // 패시브: 25% 스턴 · 속성: 예준 배정 대기
 };
 const MONSTERS = {
   slime:    { name: '슬라임', hp: 60, atk: 8, size: 78 },
@@ -1120,7 +1129,7 @@ function renderStages() {
     ? '<div style="color:#9c92c4;font-size:12px;align-self:center">출전:</div>' + owned.map(id =>
         '<div class="party-card' + (saveData.party === id ? ' sel' : '') + '" data-id="' + id + '">' +
         (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
-        '<div>' + HEROES[id].name + '</div>' +
+        '<div>' + ATTRS[HEROES[id].attr || '무'].icon + ' ' + HEROES[id].name + '</div>' +
         '<div style="color:#7cf76a;font-size:10px">Lv.' + ((saveData.lv || {})[id] || 1) + '</div></div>').join('')
     : '<div style="color:#9c92c4;font-size:13px;align-self:center">아직 캐릭터가 없어! 🎰 뽑기에서 캐릭터를 뽑아와!</div>';
   document.querySelectorAll('.party-card').forEach(c => c.onclick = () => {
@@ -1161,9 +1170,12 @@ function startStage(n) {
   // 레벨 보정: 레벨당 공격력·체력 +8% (만렙 15 = 약 2.1배)
   const lv = (saveData.lv || {})[saveData.party] || 1;
   const statMult = 1 + 0.08 * (lv - 1);
+  const attr = base.attr || '무';
   S = {
-    n, seg: 0, segTotal: segCount(n), heroId: saveData.party, lv,
-    atk: Math.round(base.atk * statMult), hp: Math.round(base.hp * statMult), maxHp: Math.round(base.hp * statMult),
+    n, seg: 0, segTotal: segCount(n), heroId: saveData.party, lv, attr,
+    // 속성 공격력 보정 (수 0.8배, 암 1.4배)
+    atk: Math.round(base.atk * statMult * ATTRS[attr].atk),
+    hp: Math.round(base.hp * statMult), maxHp: Math.round(base.hp * statMult),
     gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
     hitCount: 0, over: false,
   };
@@ -1199,7 +1211,7 @@ function spawnHero() {
   S.heroEl = unitEl(
     (art ? '<img class="body" src="' + art + '" style="height:110px">' : '<div class="body" style="font-size:64px">🧑</div>') +
     '<div class="stun-mark">💫</div>' +
-    '<div class="name-tag">' + h.name + ' Lv.' + S.lv + '</div>' +
+    '<div class="name-tag">' + ATTRS[S.attr].icon + ' ' + h.name + ' Lv.' + S.lv + '</div>' +
     '<div class="hp-bar"><div class="hp-fill"></div></div>' +
     '<div class="hp-num">' + S.hp + ' / ' + S.maxHp + '</div>',
     { left: '9%', bottom: '22%', zIndex: 5 }
@@ -1269,8 +1281,14 @@ function stageAttack() {
       // 버프 (주술/변신) 적용
       const buffed = Date.now() < S.buffUntil ? S.buffMult : 1;
       let dmg = Math.round(S.atk * (0.9 + Math.random() * 0.2) * buffed);
+      // 화속성 특성: 5% 확률로 데미지 2배 (예준 기획)
+      let fireProc = false;
+      if (ATTRS[S.attr].proc2x && Math.random() < ATTRS[S.attr].proc2x) {
+        dmg *= 2; fireProc = true;
+        popDmg(S.heroEl, '🔥 2배!!', 'ult');
+      }
       S.hitCount++;
-      hitEnemy(target, dmg, buffed > 1 ? 'ult' : 'crit');
+      hitEnemy(target, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
 
       // 조슨대왕 패시브: 2타마다 신하 소환 (예준 기획)
       if (S.heroId === 'josun' && S.hitCount % 2 === 0) {
@@ -1338,7 +1356,13 @@ function enemyCounters() {
       }
       e.el.classList.add('elunge');
       setTimeout(() => e.el.classList.remove('elunge'), 250);
-      const dmg = Math.round(e.atk * (0.9 + Math.random() * 0.2));
+      let dmg = e.atk * (0.9 + Math.random() * 0.2);
+      // 속성 방어 보정: 수 1.3배 수비 / 암 0.7배 수비
+      dmg = dmg / ATTRS[S.attr].def;
+      // 무속성 특성: 화·수속성의 공격을 0.7배로 받음 (몬스터 속성 생기면 발동)
+      const mAttr = MONSTERS[e.type].attr || '무';
+      if (S.attr === '무' && (mAttr === '화' || mAttr === '수')) dmg *= 0.7;
+      dmg = Math.round(dmg);
       S.hp -= dmg;
       popDmg(S.heroEl, dmg, 'heropain');
       if (e.poison) { S.hp -= e.poison; popDmg(S.heroEl, '☠️' + e.poison, 'tickle'); }
