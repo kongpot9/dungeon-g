@@ -333,6 +333,32 @@
   .dex-count { font-size: 12px; color: #9c92c4; }
   .lvl-btn { margin: 3px 0; padding: 5px 10px; font-size: 11px; font-weight: 900; color: #2b1c05; background: linear-gradient(180deg,#ffe9a0,#f0a93a); border: none; border-radius: 8px; box-shadow: 0 2px 0 #8a5a14; cursor: pointer; }
   .lvl-btn:active { transform: translateY(2px); box-shadow: none; }
+  .dex-card { cursor: pointer; }
+  .dex-card:active { transform: scale(.96); }
+
+  /* ── 캐릭터 상세 (브롤스타즈 스타일 — 예준 기획) ── */
+  #char-detail { position: absolute; inset: 0; z-index: 95; display: none; align-items: center; justify-content: center; background: rgba(10,6,22,.85); }
+  #char-detail.on { display: flex; }
+  #cd-box {
+    position: relative; display: flex; gap: 18px; align-items: center;
+    max-width: 92%; max-height: 88%; padding: 20px 26px;
+    background: linear-gradient(180deg, #241d3d, #1a142e);
+    border: 3px solid #5a4d8a; border-radius: 18px;
+    animation: cardPop .4s cubic-bezier(.2,2,.4,1);
+  }
+  #cd-box.rank-희귀 { border-color: #4aa8ff; box-shadow: 0 0 24px rgba(74,168,255,.4); }
+  #cd-box.rank-영웅 { border-color: #b06aff; box-shadow: 0 0 24px rgba(176,106,255,.45); }
+  #cd-box.rank-전설 { border-color: #ffd94a; box-shadow: 0 0 34px rgba(255,217,74,.6); }
+  #cd-art img { max-height: 190px; max-width: 170px; filter: drop-shadow(0 8px 14px rgba(0,0,0,.5)); }
+  #cd-info { max-width: 340px; overflow-y: auto; max-height: 70vh; }
+  #cd-name { font-size: 24px; font-weight: 900; color: #fff; }
+  #cd-rank { color: #ffd94a; font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+  #cd-lv { color: #7cf76a; font-size: 14px; font-weight: 800; }
+  #cd-stats { color: #e8e2ff; font-size: 13px; margin: 6px 0; line-height: 1.5; }
+  #cd-skill { background: #141026; border-radius: 10px; padding: 8px 10px; color: #9fdcff; font-size: 13px; margin-bottom: 8px; }
+  #cd-story { color: #b9aee0; font-size: 13px; line-height: 1.6; font-style: italic; margin-bottom: 10px; }
+  #cd-close { position: absolute; top: 8px; right: 10px; background: none; border: none; color: #8f86b5; font-size: 20px; cursor: pointer; }
+  #cd-art.locked img { filter: grayscale(1) brightness(.3); }
   #dex-progress { padding-bottom: 20px; color: #ffd94a; font-weight: 800; }
 
   /* ── 정룡술사 변신 상태 ── */
@@ -496,6 +522,21 @@
     </div>
     <div id="dex-grid"></div>
     <div id="dex-progress"></div>
+    <div id="char-detail">
+      <div id="cd-box">
+        <button id="cd-close">✖</button>
+        <div id="cd-art"></div>
+        <div id="cd-info">
+          <div id="cd-name"></div>
+          <div id="cd-rank"></div>
+          <div id="cd-lv"></div>
+          <div id="cd-stats"></div>
+          <div id="cd-skill"></div>
+          <div id="cd-story"></div>
+          <div id="cd-actions"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -894,10 +935,14 @@ function grantTickets() {
 
 // 뽑기 풀 = 아군 캐릭터만! (슬라임·슬라임킹은 적군이므로 제외 — 예준 지적으로 수정)
 const CHARS = [
-  { id: 'josun',   name: '조슨대왕',    rank: '희귀', stars: '★★★',    rate: 35, desc: '평타 2번마다 신하 1명 소환 공격' },
-  { id: 'wolf',    name: '백울프',      rank: '희귀', stars: '★★★',    rate: 35, desc: '일정 확률로 상대에게 스턴' },
-  { id: 'priest',  name: '첫사랑성직자', rank: '영웅', stars: '★★★★',  rate: 27, desc: '주술: 아군 공격력 2배 (10초)' },
-  { id: 'draebeo', name: '드래베오',    rank: '전설', stars: '★★★★★', rate: 3,  desc: '변신: 정룡술사 (평타 1.6배)' },
+  { id: 'josun',   name: '조슨대왕',    rank: '희귀', stars: '★★★',    rate: 35, desc: '평타 2번마다 신하 1명 소환 공격',
+    story: '즈은하시티에 나타난 조선의 대왕. 신하들이 대체 어디서 소환되는지는 국가 기밀이라 아무도 모른다.' },
+  { id: 'wolf',    name: '백울프',      rank: '희귀', stars: '★★★',    rate: 35, desc: '25% 확률로 상대에게 스턴',
+    story: '백호 가면을 쓴 늑대 전사. 너무 조용히 다가와서 적이 깜짝 놀라 기절한다. 그게 스턴이다.' },
+  { id: 'priest',  name: '첫사랑성직자', rank: '영웅', stars: '★★★★',  rate: 27, desc: '주술: 아군 공격력 2배 (10초)',
+    story: '첫사랑을 아직도 못 잊어서 매일 밤 촛불에 소원을 빈다. 주술의 정체는 사실... 간절한 응원의 힘이다.' },
+  { id: 'draebeo', name: '드래베오',    rank: '전설', stars: '★★★★★', rate: 3,  desc: '변신: 정룡술사 (평타 1.6배)',
+    story: '전설의 용 가면을 주운 날부터 인생이 바뀌었다. 가면을 벗는 방법은 본인도 모른다. 도끼에 달린 얼굴은 가끔 혼잣말을 한다.' },
 ];
 function charArt(id) {
   const key = id === 'draebeo' ? 'legend' : id; // 드래베오만 파일명이 legend
@@ -970,33 +1015,63 @@ function renderDex() {
   $('dex-grid').innerHTML = CHARS.map(c => {
     const n = saveData.coll[c.id] || 0;
     const lv = saveData.lv[c.id] || 1;
-    const lvHtml = !n ? '' :
-      '<div style="color:#7cf76a;font-weight:800;font-size:12px">Lv.' + lv + ' / 15</div>' +
-      (lv < 15
-        ? '<button class="lvl-btn" data-id="' + c.id + '">⭐' + levelCost(lv) + ' 레벨업</button>'
-        : '<div style="color:#ffd94a;font-size:11px;font-weight:800">👑 만렙!</div>');
-    return '<div class="dex-card' + (n ? '' : ' locked') + '">' + charArt(c.id) +
+    return '<div class="dex-card' + (n ? '' : ' locked') + '" data-id="' + c.id + '">' + charArt(c.id) +
       '<div style="font-weight:900">' + (n ? c.name : '???') + '</div>' +
       '<div style="font-size:12px;color:#ffd94a">' + c.stars + ' ' + c.rank + '</div>' +
-      lvHtml +
-      '<div style="font-size:11px;color:#9c92c4;min-height:14px">' + (n ? c.desc : '') + '</div>' +
-      '</div>';
+      (n ? '<div style="color:#7cf76a;font-weight:800;font-size:12px">Lv.' + lv + ' / 15</div>' : '') +
+      '<div class="dex-count">' + (n ? '👆 탭해서 자세히!' : '미획득') + '</div></div>';
   }).join('');
-  document.querySelectorAll('.lvl-btn').forEach(b => b.onclick = () => {
-    const id = b.dataset.id;
-    const lv = saveData.lv[id] || 1;
-    const cost = levelCost(lv);
-    if ((saveData.candy || 0) < cost) {
-      $('dex-progress').textContent = '⭐ 별사탕이 부족해! (' + (saveData.candy || 0) + '/' + cost + ') — 던전에서 모아와!';
-      return;
-    }
-    saveData.candy -= cost;
-    saveData.lv[id] = lv + 1;
-    persist(); refreshCandy(); renderDex();
-  });
+  document.querySelectorAll('.dex-card').forEach(card => card.onclick = () => openCharDetail(card.dataset.id));
   $('dex-progress').textContent = '캐릭터 수집률 ' + Math.round(owned / CHARS.length * 100) + '%' +
     (owned === CHARS.length ? ' — G의 비밀에 가까워지고 있다...' : '');
 }
+
+// ── 캐릭터 상세 (브롤스타즈 스타일 — 예준 기획: 설명 + 스토리 + 업그레이드) ──
+function openCharDetail(id) {
+  const c = CHARS.find(x => x.id === id);
+  if (!c) return;
+  const n = saveData.coll[id] || 0;
+  $('cd-box').className = n ? 'rank-' + c.rank : '';
+  $('cd-art').innerHTML = charArt(id);
+  $('cd-art').className = n ? '' : 'locked';
+  if (!n) {
+    $('cd-name').textContent = '???';
+    $('cd-rank').textContent = c.stars + ' ' + c.rank;
+    $('cd-lv').textContent = '';
+    $('cd-stats').textContent = '';
+    $('cd-skill').textContent = '✨ ???';
+    $('cd-story').textContent = '뽑기에서 만나면 이야기가 공개된다...';
+    $('cd-actions').innerHTML = '';
+  } else {
+    const lv = (saveData.lv || {})[id] || 1;
+    const h = HEROES[id];
+    const mult = 1 + 0.08 * (lv - 1);
+    $('cd-name').textContent = c.name;
+    $('cd-rank').textContent = c.stars + ' ' + c.rank;
+    $('cd-lv').textContent = 'Lv.' + lv + ' / 15' + (lv >= 15 ? ' 👑 만렙!' : '');
+    $('cd-stats').innerHTML = '⚔️ 공격력 ' + Math.round(h.atk * mult) + ' &nbsp;&nbsp; ❤️ 체력 ' + Math.round(h.hp * mult);
+    $('cd-skill').textContent = '✨ ' + c.desc;
+    $('cd-story').textContent = '“' + c.story + '”';
+    $('cd-actions').innerHTML = lv < 15
+      ? '<button class="lvl-btn" style="font-size:14px;padding:9px 18px" id="cd-lvlup">⭐' + levelCost(lv) + ' 레벨업</button>'
+      : '';
+    const btn = $('cd-lvlup');
+    if (btn) btn.onclick = () => {
+      const cost = levelCost(lv);
+      if ((saveData.candy || 0) < cost) {
+        btn.textContent = '⭐ 별사탕 부족! (' + (saveData.candy || 0) + '/' + cost + ')';
+        return;
+      }
+      saveData.candy -= cost;
+      saveData.lv[id] = lv + 1;
+      persist(); refreshCandy(); renderDex();
+      openCharDetail(id); // 새 레벨로 다시 그림
+    };
+  }
+  $('char-detail').classList.add('on');
+}
+$('cd-close').onclick = () => $('char-detail').classList.remove('on');
+$('char-detail').onclick = e => { if (e.target.id === 'char-detail') $('char-detail').classList.remove('on'); };
 
 $('gacha-open').onclick = () => {
   $('gacha-result').classList.remove('on');
