@@ -49,6 +49,51 @@
   #start-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #8a5a14; }
   @keyframes pulse { 0%,100% { transform: scale(1);} 50% { transform: scale(1.05);} }
 
+  /* ── 스테이지 선택 (제1지역 즈은하시티) ── */
+  #party-row { display: flex; gap: 10px; padding: 4px 12px; }
+  .party-card {
+    width: 74px; padding: 6px; border-radius: 12px; text-align: center; cursor: pointer;
+    background: #1a142e; border: 3px solid #5a4d8a; color: #e8e2ff; font-size: 11px; font-weight: 800;
+  }
+  .party-card img { max-width: 54px; max-height: 48px; }
+  .party-card.sel { border-color: #ffd94a; box-shadow: 0 0 14px rgba(255,217,74,.5); }
+  #stage-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; padding: 8px 20px; max-width: 640px; }
+  .stage-btn {
+    width: 76px; padding: 10px 0; font-size: 15px; font-weight: 900; color: #2b1c05; cursor: pointer;
+    background: linear-gradient(180deg, #ffe9a0, #f0a93a); border: none; border-radius: 12px;
+    box-shadow: 0 4px 0 #8a5a14;
+  }
+  .stage-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #8a5a14; }
+  .stage-btn.locked { filter: grayscale(1) brightness(.55); cursor: default; }
+  .stage-btn.boss { background: linear-gradient(180deg, #ff9a6a, #d63920); color: #fff; box-shadow: 0 4px 0 #7e1a0a; }
+
+  /* ── 스테이지 전투 ── */
+  .stage-mode .fighter { display: none !important; }
+  .stage-mode #dialogue { display: none; }
+  #flee-btn { display: none; position: absolute; top: 6px; left: 10px; z-index: 46; background: #241d3d; color: #9c92c4; border: 2px solid #5a4d8a; border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 800; cursor: pointer; }
+  .stage-mode #flee-btn { display: block; }
+  .s-fighter { position: absolute; text-align: center; transition: transform .15s; }
+  .s-fighter img.body { display: block; margin: 0 auto; filter: drop-shadow(0 6px 8px rgba(0,0,0,.45)); }
+  .s-fighter.lunge { transform: translateX(46px); }
+  .s-fighter.elunge { transform: translateX(-40px); }
+  .s-fighter.hurt { animation: hurtFx .3s; }
+  .s-fighter.dead img.body { animation: splat .45s forwards; }
+  .s-fighter .stun-mark { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 22px; display: none; }
+  .s-fighter.stunned .stun-mark { display: block; animation: pulse 0.8s infinite; }
+  .s-fighter.stunned img.body { filter: grayscale(.7) brightness(.8); }
+  .minion-pop { position: absolute; z-index: 18; pointer-events: none; animation: minionFx .7s ease-out forwards; filter: sepia(.6) drop-shadow(0 0 10px rgba(255,217,74,.8)); }
+  @keyframes minionFx { 0% { opacity: 0; transform: translateY(20px) scale(.4);} 30% { opacity: 1; transform: translateY(0) scale(1);} 100% { opacity: 0; transform: translateY(-30px) scale(.9);} }
+
+  /* ── 스테이지 결과 (상자 연출) ── */
+  #stage-result { position: absolute; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center; background: rgba(10,6,22,.8); }
+  #stage-result.on { display: flex; }
+  #result-box { text-align: center; padding: 22px 34px; background: linear-gradient(180deg,#241d3d,#1a142e); border: 3px solid #5a4d8a; border-radius: 18px; animation: cardPop .5s cubic-bezier(.2,2,.4,1); }
+  #result-chest { height: 110px; display: none; margin: 0 auto 6px; animation: chestPop .8s cubic-bezier(.2,2,.4,1); }
+  @keyframes chestPop { 0% { transform: scale(.2) rotate(-10deg);} 60% { transform: scale(1.15);} 100% { transform: scale(1);} }
+  #result-title { font-size: 26px; font-weight: 900; color: #ffe9a0; margin-bottom: 6px; }
+  #result-rewards { color: #cfeaa0; font-size: 15px; font-weight: 700; line-height: 1.6; margin-bottom: 14px; }
+  .result-action { padding: 12px 30px; margin: 0 5px; font-size: 17px; font-weight: 900; color: #2b1c05; background: linear-gradient(180deg,#ffe9a0,#f0a93a); border: none; border-radius: 12px; box-shadow: 0 4px 0 #8a5a14; cursor: pointer; }
+
   /* ── 예준이 손그림 버튼 (img-btn 클래스가 붙으면 원래 버튼 껍데기를 지우고 그림만 보임) ── */
   .img-btn { background: none; border: none; box-shadow: none; padding: 0; }
   .img-btn img { display: block; height: 56px; filter: drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
@@ -368,6 +413,16 @@
       </div>
 
       <div id="ult-bolt">🐉</div>
+      <div id="stage-units"></div>
+    </div>
+    <button id="flee-btn">🏃 도망</button>
+    <div id="stage-result">
+      <div id="result-box">
+        <img id="result-chest" alt="">
+        <div id="result-title"></div>
+        <div id="result-rewards"></div>
+        <div id="result-actions"></div>
+      </div>
     </div>
 
     <div id="dialogue">
@@ -410,6 +465,21 @@
     <button id="pull-btn">뽑기! (🎟️ 1장)</button>
   </div>
 
+  <!-- 스테이지 선택 -->
+  <div id="stage-screen" class="sub-screen">
+    <div class="sub-head">
+      <button class="back-btn">← 뒤로</button>
+      <div class="sub-title">🏙️ 제1지역 즈은하시티</div>
+      <div style="display:flex;gap:8px">
+        <div class="ticket-chip candy-view">⭐ 0</div>
+        <div class="ticket-chip ticket-view"></div>
+      </div>
+    </div>
+    <div id="party-row"></div>
+    <div id="stage-grid"></div>
+    <div id="stage-msg" style="color:#9c92c4;font-size:12px;min-height:16px;padding-bottom:10px"></div>
+  </div>
+
   <!-- 도감 -->
   <div id="dex-screen" class="sub-screen">
     <div class="sub-head">
@@ -425,6 +495,7 @@
 <script>
 const $ = id => document.getElementById(id);
 let busy = false;
+let mode = 'tutorial'; // 'tutorial' | 'stage'
 
 // ── 예준 그림 자동 로더 ──
 // character/, skill/ 폴더에 정해진 이름의 파일이 있으면 임시 그림 대신 사용
@@ -560,6 +631,7 @@ function revertForm() {
   gauge = 0; updateGaugeUI(); // 다시 차면 재변신 가능
 }
 setInterval(() => {
+  if (mode !== 'tutorial') return;
   if (phase === 'intro') return;
   if (transformed) {
     gauge = Math.max(0, gauge - 100 / TRANSFORM_SEC);
@@ -681,6 +753,7 @@ function dropBolt(targetEl) {
 
 // ── 공격 ──
 $('atk-btn').onclick = () => {
+  if (mode === 'stage') return stageAttack();
   if (busy) return;
   busy = true; $('atk-btn').disabled = true;
   $('legend').classList.add('lunge');
@@ -761,6 +834,7 @@ $('atk-btn').onclick = () => {
 // ── 필살기 ──
 // 🐉 변신 버튼 (예준 기획: 필살기 = 정룡술사 변신)
 $('ult-btn').onclick = () => {
+  if (mode === 'stage') return stageSkill();
   if (busy) return;
   busy = true; $('ult-btn').disabled = true; $('ult-btn').classList.remove('on');
 
@@ -804,7 +878,12 @@ function persist() { localStorage.setItem(SAVE_KEY, JSON.stringify(saveData)); }
 function refreshTickets() {
   document.querySelectorAll('.ticket-view').forEach(el => el.textContent = '🎟️ 뽑기권 ' + saveData.tickets + '장');
 }
-function grantTickets() { saveData.tickets += 3; persist(); refreshTickets(); }
+function grantTickets() {
+  saveData.tickets += 3;
+  // 튜토리얼 클리어 기록 → 스테이지 1-1 해금
+  if (!(saveData.cleared || []).includes('tut')) saveData.cleared = [...(saveData.cleared || []), 'tut'];
+  persist(); refreshTickets();
+}
 
 // 뽑기 풀 = 아군 캐릭터만! (슬라임·슬라임킹은 적군이므로 제외 — 예준 지적으로 수정)
 const CHARS = [
@@ -886,12 +965,383 @@ $('dex-open').onclick = () => { renderDex(); refreshTickets(); $('dex-screen').c
 document.querySelectorAll('.back-btn').forEach(b => b.onclick = () => b.closest('.sub-screen').classList.remove('on'));
 refreshTickets();
 
-$('start-btn').onclick = () => {
+// ═══════════ 스테이지 시스템 — 제1지역 즈은하시티 1-1~1-10 (기획: 구예준) ═══════════
+// 한 스테이지 = 길(세그먼트) 3~5개 반복 + 1-10은 슬라임킹 보스전
+
+const HEROES = {
+  draebeo: { name: '드래베오', atk: 120, hp: 300, skill: '🐉 변신', hasGauge: true },
+  priest:  { name: '첫사랑성직자', atk: 70, hp: 260, skill: '🔮 주술', hasGauge: true },
+  josun:   { name: '조슨대왕', atk: 85, hp: 280, skill: null, hasGauge: false }, // 패시브: 2타마다 신하 소환
+  wolf:    { name: '백울프', atk: 90, hp: 270, skill: null, hasGauge: false },   // 패시브: 25% 스턴
+};
+const MONSTERS = {
+  slime:    { name: '슬라임', hp: 60, atk: 8, size: 78 },
+  bat:      { name: '박쥐', hp: 45, atk: 10, size: 70 },   // 제1지역은 초보 구간 → 공격력 흡수 없음 (예준 기획)
+  mushroom: { name: '독버섯', hp: 70, atk: 7, size: 76, poison: 3 },
+  tree:     { name: '화가 난 나무', hp: 140, atk: 12, size: 104 },
+  king:     { name: '슬라임킹', hp: 900, atk: 20, size: 150, boss: true },
+};
+const ENEMY_POS = [
+  { right: '8%', bottom: '20%' }, { right: '21%', bottom: '33%' }, { right: '32%', bottom: '17%' },
+];
+
+let S = null; // 진행 중인 스테이지 상태
+const heroKey = id => id === 'draebeo' ? 'legend' : id;
+
+function ownedHeroes() { return Object.keys(HEROES).filter(id => saveData.coll[id]); }
+function refreshCandy() { document.querySelectorAll('.candy-view').forEach(el => el.textContent = '⭐ ' + (saveData.candy || 0)); }
+
+// ── 스테이지 선택 화면 ──
+function renderStages() {
+  const cleared = saveData.cleared || [];
+  const owned = ownedHeroes();
+  if (!owned.includes(saveData.party)) saveData.party = owned[0] || null;
+
+  $('party-row').innerHTML = owned.length
+    ? '<div style="color:#9c92c4;font-size:12px;align-self:center">출전:</div>' + owned.map(id =>
+        '<div class="party-card' + (saveData.party === id ? ' sel' : '') + '" data-id="' + id + '">' +
+        (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
+        '<div>' + HEROES[id].name + '</div></div>').join('')
+    : '<div style="color:#9c92c4;font-size:13px;align-self:center">아직 캐릭터가 없어! 🎰 뽑기에서 캐릭터를 뽑아와!</div>';
+  document.querySelectorAll('.party-card').forEach(c => c.onclick = () => {
+    saveData.party = c.dataset.id; persist(); renderStages();
+  });
+
+  const tutDone = cleared.includes('tut');
+  let html = '<button class="stage-btn" data-stage="tut">튜토리얼' + (tutDone ? ' ⭐' : '') + '</button>';
+  for (let i = 1; i <= 10; i++) {
+    const done = cleared.includes(String(i));
+    const unlocked = tutDone && (i === 1 || cleared.includes(String(i - 1)));
+    html += '<button class="stage-btn' + (i === 10 ? ' boss' : '') + (unlocked ? '' : ' locked') + '" data-stage="' + i + '">' +
+      (unlocked ? '1-' + i + (done ? ' ⭐' : '') + (i === 10 ? ' 👑' : '') : '🔒') + '</button>';
+  }
+  $('stage-grid').innerHTML = html;
+  document.querySelectorAll('.stage-btn').forEach(b => b.onclick = () => {
+    if (b.classList.contains('locked')) { $('stage-msg').textContent = '이전 스테이지를 먼저 깨야 해!'; return; }
+    if (b.dataset.stage === 'tut') return startTutorial();
+    if (!saveData.party) { $('stage-msg').textContent = '캐릭터가 없어! 🎰 뽑기 먼저!'; return; }
+    startStage(parseInt(b.dataset.stage));
+  });
+  refreshCandy(); refreshTickets();
+}
+
+// 튜토리얼은 스크립트가 새 페이지 기준이라 리로드로 진입
+function startTutorial() {
+  sessionStorage.setItem('autoTut', '1');
+  location.reload();
+}
+
+// ── 스테이지 전투 ──
+function segCount(n) { return n === 10 ? 3 : n <= 3 ? 3 : n <= 6 ? 4 : 5; }
+function stagePool(n) { return n <= 3 ? ['slime'] : n <= 6 ? ['slime', 'bat'] : ['slime', 'bat', 'mushroom', 'tree']; }
+
+function startStage(n) {
+  mode = 'stage';
+  const base = HEROES[saveData.party];
+  S = {
+    n, seg: 0, segTotal: segCount(n), heroId: saveData.party,
+    atk: base.atk, hp: base.hp, maxHp: base.hp,
+    gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
+    hitCount: 0, over: false,
+  };
+  $('stage-screen').classList.remove('on');
   $('title-screen').style.display = 'none';
-  $('battle-screen').classList.add('on');
-  setTimeout(nextLine, 400);
+  const bs = $('battle-screen');
+  bs.classList.add('on', 'stage-mode');
+  $('stage-result').classList.remove('on');
+  $('atk-btn').classList.add('on'); $('atk-btn').disabled = false;
+  $('ult-btn').classList.remove('on');
+  const hasGauge = HEROES[S.heroId].hasGauge;
+  $('gauge-wrap').classList.toggle('on', hasGauge);
+  $('gauge-wrap').classList.remove('full', 'trans');
+  document.querySelector('#gauge-label span').textContent = HEROES[S.heroId].skill || '⚡';
+  if (HEROES[S.heroId].skill) $('ult-btn').textContent = HEROES[S.heroId].skill;
+  spawnHero();
+  nextSegment();
+}
+
+function unitEl(html, style) {
+  const d = document.createElement('div');
+  d.className = 's-fighter';
+  d.innerHTML = html;
+  Object.assign(d.style, style);
+  $('stage-units').appendChild(d);
+  return d;
+}
+
+function spawnHero() {
+  $('stage-units').innerHTML = '';
+  const h = HEROES[S.heroId];
+  const art = ART[heroKey(S.heroId)];
+  S.heroEl = unitEl(
+    (art ? '<img class="body" src="' + art + '" style="height:110px">' : '<div class="body" style="font-size:64px">🧑</div>') +
+    '<div class="stun-mark">💫</div>' +
+    '<div class="name-tag">' + h.name + '</div>' +
+    '<div class="hp-bar"><div class="hp-fill"></div></div>' +
+    '<div class="hp-num">' + S.hp + ' / ' + S.maxHp + '</div>',
+    { left: '9%', bottom: '22%', zIndex: 5 }
+  );
+}
+
+function nextSegment() {
+  S.seg++;
+  S.enemies = [];
+  document.querySelectorAll('#stage-units .enemy').forEach(e => e.remove());
+  const isBossSeg = S.n === 10 && S.seg === S.segTotal;
+  let types;
+  if (isBossSeg) types = ['king'];
+  else {
+    const pool = stagePool(S.n);
+    const cnt = Math.min(3, 2 + (Math.random() < 0.4 ? 1 : 0));
+    types = Array.from({ length: cnt }, () => pool[Math.floor(Math.random() * pool.length)]);
+  }
+  const hpScale = 1 + (S.n - 1) * 0.12, atkScale = 1 + (S.n - 1) * 0.05;
+  types.forEach((t, i) => {
+    const m = MONSTERS[t];
+    const hp = Math.round(m.hp * (m.boss ? 1 : hpScale));
+    const el = unitEl(
+      (ART[t] ? '<img class="body" src="' + ART[t] + '" style="height:' + m.size + 'px">' : '<div class="body" style="font-size:50px">👾</div>') +
+      '<div class="stun-mark">💫</div>' +
+      '<div class="name-tag">' + m.name + '</div>' +
+      '<div class="hp-bar"><div class="hp-fill"></div></div>' +
+      '<div class="hp-num">' + hp + ' / ' + hp + '</div>',
+      m.boss ? { right: '12%', bottom: '18%', zIndex: 4 } : { ...ENEMY_POS[i], zIndex: 4 }
+    );
+    el.classList.add('enemy');
+    el.style.opacity = 0; el.style.transform = 'translateX(60px)';
+    setTimeout(() => { el.style.transition = 'all .45s ease-out'; el.style.opacity = 1; el.style.transform = 'none'; }, 80 + i * 150);
+    S.enemies.push({ type: t, hp, maxHp: hp, atk: Math.round(m.atk * (m.boss ? 1 : atkScale)), poison: m.poison || 0, stunned: false, el });
+  });
+  $('dungeon-name').textContent = S.n === 10 && isBossSeg
+    ? '1-10 즈은하시티 · 👑 보스전!'
+    : '1-' + S.n + ' 즈은하시티 · 길 ' + S.seg + '/' + S.segTotal;
+}
+
+function setUnitHp(u) {
+  const pct = Math.max(0, u.hp / u.maxHp * 100);
+  const f = u.el.querySelector('.hp-fill');
+  f.style.width = pct + '%';
+  f.classList.toggle('low', pct < 35);
+  u.el.querySelector('.hp-num').textContent = Math.max(0, Math.round(u.hp)) + ' / ' + u.maxHp;
+}
+function setHeroHp() {
+  const pct = Math.max(0, S.hp / S.maxHp * 100);
+  const f = S.heroEl.querySelector('.hp-fill');
+  f.style.width = pct + '%';
+  f.classList.toggle('low', pct < 35);
+  S.heroEl.querySelector('.hp-num').textContent = Math.max(0, Math.round(S.hp)) + ' / ' + S.maxHp;
+}
+
+function stageAttack() {
+  if (busy || !S || S.over) return;
+  const target = S.enemies.find(e => e.hp > 0);
+  if (!target) return;
+  busy = true; $('atk-btn').disabled = true;
+  S.heroEl.classList.add('lunge');
+
+  setTimeout(() => {
+    S.heroEl.classList.remove('lunge');
+    dropBolt(target.el);
+    setTimeout(() => {
+      // 버프 (주술/변신) 적용
+      const buffed = Date.now() < S.buffUntil ? S.buffMult : 1;
+      let dmg = Math.round(S.atk * (0.9 + Math.random() * 0.2) * buffed);
+      S.hitCount++;
+      hitEnemy(target, dmg, buffed > 1 ? 'ult' : 'crit');
+
+      // 조슨대왕 패시브: 2타마다 신하 소환 (예준 기획)
+      if (S.heroId === 'josun' && S.hitCount % 2 === 0) {
+        const t2 = S.enemies.find(e => e.hp > 0) || target;
+        spawnMinion(t2.el);
+        setTimeout(() => { if (t2.hp > 0) hitEnemy(t2, Math.round(S.atk * 0.6), 'crit'); }, 350);
+      }
+      // 백울프 패시브: 25% 확률 스턴 (예준 기획)
+      if (S.heroId === 'wolf' && target.hp > 0 && Math.random() < 0.25) {
+        target.stunned = true;
+        target.el.classList.add('stunned');
+      }
+      // 게이지 충전 (변신/주술 캐릭터만)
+      if (HEROES[S.heroId].hasGauge && Date.now() >= S.buffUntil) {
+        S.gauge = Math.min(100, S.gauge + 22);
+        updateStageGauge();
+      }
+
+      setTimeout(() => {
+        if (S.over) return;
+        if (S.enemies.every(e => e.hp <= 0)) {
+          // 세그먼트 클리어
+          if (S.seg >= S.segTotal) return stageWin();
+          busy = false; $('atk-btn').disabled = false;
+          setTimeout(nextSegment, 550);
+        } else {
+          enemyCounters();
+        }
+      }, 500);
+    }, 300);
+  }, 150);
+}
+
+function hitEnemy(u, dmg, cls) {
+  u.hp -= dmg;
+  setUnitHp(u);
+  popDmg(u.el, dmg, cls);
+  u.el.classList.add('hurt');
+  $('arena').classList.add('shake');
+  setTimeout(() => { u.el.classList.remove('hurt'); $('arena').classList.remove('shake'); }, 300);
+  if (u.hp <= 0) u.el.classList.add('dead');
+}
+
+function spawnMinion(targetEl) {
+  const m = document.createElement(ART.josun ? 'img' : 'div');
+  m.className = 'minion-pop';
+  if (ART.josun) { m.src = ART.josun; m.style.height = '60px'; } else m.textContent = '🤴';
+  const box = targetEl.getBoundingClientRect(), arena = $('arena').getBoundingClientRect();
+  m.style.left = (box.left - arena.left - 50) + 'px';
+  m.style.top = (box.top - arena.top + 20) + 'px';
+  $('arena').appendChild(m);
+  setTimeout(() => m.remove(), 750);
+}
+
+function enemyCounters() {
+  const alive = S.enemies.filter(e => e.hp > 0);
+  let delay = 0;
+  alive.forEach(e => {
+    setTimeout(() => {
+      if (S.over) return;
+      if (e.stunned) { // 스턴: 이번 반격 건너뜀
+        e.stunned = false;
+        e.el.classList.remove('stunned');
+        return;
+      }
+      e.el.classList.add('elunge');
+      setTimeout(() => e.el.classList.remove('elunge'), 250);
+      const dmg = Math.round(e.atk * (0.9 + Math.random() * 0.2));
+      S.hp -= dmg;
+      popDmg(S.heroEl, dmg, 'heropain');
+      if (e.poison) { S.hp -= e.poison; popDmg(S.heroEl, '☠️' + e.poison, 'tickle'); }
+      setHeroHp();
+      S.heroEl.classList.add('hurt');
+      setTimeout(() => S.heroEl.classList.remove('hurt'), 300);
+      if (S.hp <= 0) stageLose();
+    }, delay);
+    delay += 320;
+  });
+  setTimeout(() => {
+    if (S.over) return;
+    busy = false; $('atk-btn').disabled = false;
+  }, delay + 350);
+}
+
+function updateStageGauge() {
+  $('gauge-fill').style.width = S.gauge + '%';
+  $('gauge-pct').textContent = Math.floor(S.gauge) + '%';
+  const full = S.gauge >= 100 && Date.now() >= S.buffUntil;
+  $('gauge-wrap').classList.toggle('full', full);
+  if (full) { $('ult-btn').classList.add('on'); $('ult-btn').disabled = false; }
+}
+
+function stageSkill() {
+  if (!S || S.over || S.gauge < 100) return;
+  S.gauge = 0;
+  $('ult-btn').classList.remove('on');
+  $('flash').classList.add('on');
+  spawnUltBurst();
+  setTimeout(() => $('flash').classList.remove('on'), 700);
+  if (S.heroId === 'draebeo') {
+    S.buffMult = 1.6; S.buffUntil = Date.now() + 60000; S.transformed = true;
+    if (ART.legend2) S.heroEl.querySelector('img.body').src = ART.legend2;
+    S.heroEl.querySelector('.name-tag').textContent = '정룡술사 드래베오';
+    $('gauge-wrap').classList.add('trans');
+  } else if (S.heroId === 'priest') {
+    S.buffMult = 2; S.buffUntil = Date.now() + 10000; // 주술: 10초간 공격력 2배 (예준 기획)
+    $('gauge-wrap').classList.add('trans');
+  }
+  updateStageGauge();
+}
+
+// 스테이지용 초당 틱: 게이지 자동충전 + 버프 종료 처리
+setInterval(() => {
+  if (mode !== 'stage' || !S || S.over) return;
+  if (HEROES[S.heroId].hasGauge) {
+    if (Date.now() < S.buffUntil) {
+      // 버프 중: 남은 시간 게이지로 표시
+      const total = S.heroId === 'draebeo' ? 60000 : 10000;
+      S.gauge = Math.max(0, (S.buffUntil - Date.now()) / total * 100);
+      updateStageGauge();
+    } else {
+      if (S.transformed) { // 변신 종료 → 원래 모습
+        S.transformed = false; S.buffMult = 1;
+        if (ART.legend) S.heroEl.querySelector('img.body').src = ART.legend;
+        S.heroEl.querySelector('.name-tag').textContent = HEROES[S.heroId].name;
+        $('gauge-wrap').classList.remove('trans');
+      } else if (S.buffMult > 1) {
+        S.buffMult = 1;
+        $('gauge-wrap').classList.remove('trans');
+      }
+      S.gauge = Math.min(100, S.gauge + 3);
+      updateStageGauge();
+    }
+  }
+}, 1000);
+
+// ── 승리 / 패배 / 도망 ──
+function stageWin() {
+  S.over = true;
+  const first = !(saveData.cleared || []).includes(String(S.n));
+  const candy = 4 + S.n, tickets = first ? 3 : 1;
+  saveData.candy = (saveData.candy || 0) + candy;
+  saveData.tickets += tickets;
+  if (first) saveData.cleared = [...(saveData.cleared || []), String(S.n)];
+  persist();
+  if (ART.chest) { $('result-chest').src = ART.chest; $('result-chest').style.display = 'block'; }
+  $('result-title').textContent = '🎉 1-' + S.n + ' 클리어!';
+  $('result-rewards').innerHTML = '⭐ 별사탕 +' + candy + '<br>🎟️ 뽑기권 +' + tickets + (first ? ' (첫 클리어!)' : '');
+  $('result-actions').innerHTML = '<button class="result-action" id="result-ok">확인</button>';
+  $('result-ok').onclick = exitStage;
+  $('stage-result').classList.add('on');
+}
+function stageLose() {
+  S.over = true;
+  $('result-chest').style.display = 'none';
+  $('result-title').textContent = '💀 패배...';
+  $('result-rewards').textContent = '즈은하시티는 만만하지 않다!';
+  $('result-actions').innerHTML =
+    '<button class="result-action" id="result-retry">다시 도전</button>' +
+    '<button class="result-action" id="result-exit">나가기</button>';
+  $('result-retry').onclick = () => startStage(S.n);
+  $('result-exit').onclick = exitStage;
+  $('stage-result').classList.add('on');
+}
+function exitStage() {
+  mode = 'menu';
+  busy = false; S = null;
+  $('stage-result').classList.remove('on');
+  $('battle-screen').classList.remove('on', 'stage-mode');
+  $('stage-units').innerHTML = '';
+  $('atk-btn').classList.remove('on');
+  $('ult-btn').classList.remove('on');
+  $('gauge-wrap').classList.remove('on', 'full', 'trans');
+  $('title-screen').style.display = '';
+  renderStages();
+  $('stage-screen').classList.add('on');
+}
+$('flee-btn').onclick = () => { if (mode === 'stage') exitStage(); };
+
+// ── 진입점: 플레이 버튼 → 스테이지 선택 ──
+$('start-btn').onclick = () => {
+  renderStages();
+  $('stage-screen').classList.add('on');
 };
 $('dialogue').onclick = nextLine;
+
+// 튜토리얼 자동 진입 (스테이지 화면에서 리로드로 넘어옴)
+if (sessionStorage.getItem('autoTut')) {
+  sessionStorage.removeItem('autoTut');
+  mode = 'tutorial';
+  $('title-screen').style.display = 'none';
+  $('battle-screen').classList.add('on');
+  setTimeout(nextLine, 600);
+}
 </script>
 </body>
 </html>
