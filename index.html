@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>던전G</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  /* touch-action: manipulation → 모바일 더블탭/광클 확대 방지 (제보: 구예준) */
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; touch-action: manipulation; }
   html, body { height: 100%; overflow: hidden; background: #0d0b14; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
 
   /* ── 세로로 들면 돌려달라고 하기 (가로 게임) ── */
@@ -280,10 +281,11 @@
     background: radial-gradient(ellipse at 50% 30%, #2a1f4d 0%, #0d0b14 70%);
   }
   .sub-screen.on { display: flex; }
-  .sub-head { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; }
-  .back-btn { background: #241d3d; color: #e8e2ff; border: 2px solid #5a4d8a; border-radius: 10px; padding: 8px 14px; font-weight: 800; font-size: 14px; cursor: pointer; }
-  .sub-title { font-size: 20px; font-weight: 900; color: #ffe9a0; }
-  .ticket-chip { background: #241d3d; border: 2px solid #5a4d8a; border-radius: 10px; padding: 6px 12px; color: #ffd94a; font-weight: 800; font-size: 13px; }
+  /* 좁은 폰에서 뽑기권 칩이 짤리지 않게: 제목이 줄어들고 칩은 고정폭 유지 (제보: 구예준) */
+  .sub-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; }
+  .back-btn { background: #241d3d; color: #e8e2ff; border: 2px solid #5a4d8a; border-radius: 10px; padding: 7px 12px; font-weight: 800; font-size: 13px; cursor: pointer; flex-shrink: 0; }
+  .sub-title { font-size: 17px; font-weight: 900; color: #ffe9a0; flex: 1; text-align: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ticket-chip { background: #241d3d; border: 2px solid #5a4d8a; border-radius: 10px; padding: 5px 9px; color: #ffd94a; font-weight: 800; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
   .menu-btn { padding: 10px 22px; font-size: 16px; font-weight: 800; color: #e8e2ff; background: #241d3d; border: 2px solid #5a4d8a; border-radius: 12px; cursor: pointer; }
   .menu-btn:active { transform: translateY(2px); }
 
@@ -329,6 +331,8 @@
   .dex-card.locked { filter: grayscale(1) brightness(.55); }
   .dex-card img { max-width: 100px; max-height: 88px; }
   .dex-count { font-size: 12px; color: #9c92c4; }
+  .lvl-btn { margin: 3px 0; padding: 5px 10px; font-size: 11px; font-weight: 900; color: #2b1c05; background: linear-gradient(180deg,#ffe9a0,#f0a93a); border: none; border-radius: 8px; box-shadow: 0 2px 0 #8a5a14; cursor: pointer; }
+  .lvl-btn:active { transform: translateY(2px); box-shadow: none; }
   #dex-progress { padding-bottom: 20px; color: #ffd94a; font-weight: 800; }
 
   /* ── 정룡술사 변신 상태 ── */
@@ -485,7 +489,10 @@
     <div class="sub-head">
       <button class="back-btn">← 뒤로</button>
       <div class="sub-title">📖 캐릭터</div>
-      <div class="ticket-chip ticket-view"></div>
+      <div style="display:flex;gap:6px">
+        <div class="ticket-chip candy-view">⭐ 0</div>
+        <div class="ticket-chip ticket-view"></div>
+      </div>
     </div>
     <div id="dex-grid"></div>
     <div id="dex-progress"></div>
@@ -926,30 +933,67 @@ $('pull-btn').onclick = () => {
     circle.textContent = '🎁';
     const isNew = !saveData.coll[pick.id];
     saveData.coll[pick.id] = (saveData.coll[pick.id] || 0) + 1;
-    persist();
+    saveData.lv = saveData.lv || {};
+    // 중복 처리 (예준 기획): 중복 = 레벨업 (만렙 15), 만렙이면 별사탕으로 전환
+    let subText;
+    if (isNew) {
+      saveData.lv[pick.id] = 1;
+      subText = '<span style="color:#7cf76a">NEW! 캐릭터 등록!</span>';
+    } else {
+      const lv = saveData.lv[pick.id] || 1;
+      if (lv < 15) {
+        saveData.lv[pick.id] = lv + 1;
+        subText = '<span style="color:#ffd94a">중복! 레벨 업 → Lv.' + (lv + 1) + '</span>';
+      } else {
+        saveData.candy = (saveData.candy || 0) + 5;
+        subText = '<span style="color:#9c92c4">만렙이라 ⭐ 별사탕 +5</span>';
+      }
+    }
+    persist(); refreshCandy();
 
     const card = $('result-card');
     card.className = 'rank-' + pick.rank;
     card.innerHTML = charArt(pick.id) +
       '<div style="font-weight:900;font-size:17px;color:#fff">' + pick.name + '</div>' +
       '<div style="color:#ffd94a;font-size:13px">' + pick.stars + ' ' + pick.rank + '</div>' +
-      '<div style="font-size:12px;color:' + (isNew ? '#7cf76a' : '#9c92c4') + '">' + (isNew ? 'NEW! 캐릭터 등록!' : '중복 +1') + '</div>';
+      '<div style="font-size:12px">' + subText + '</div>';
     $('gacha-result').classList.add('on');
     if (legendary) $('gacha-msg').textContent = '"...다시 만났군." — 드래베오';
     pulling = false;
   }, legendary ? 2800 : 1400);
 };
 
+function levelCost(lv) { return lv * 5; } // 별사탕 레벨업 비용 (Lv.1→2 = 5개, Lv.2→3 = 10개...)
 function renderDex() {
   const owned = CHARS.filter(c => saveData.coll[c.id]).length;
+  saveData.lv = saveData.lv || {};
   $('dex-grid').innerHTML = CHARS.map(c => {
     const n = saveData.coll[c.id] || 0;
+    const lv = saveData.lv[c.id] || 1;
+    const lvHtml = !n ? '' :
+      '<div style="color:#7cf76a;font-weight:800;font-size:12px">Lv.' + lv + ' / 15</div>' +
+      (lv < 15
+        ? '<button class="lvl-btn" data-id="' + c.id + '">⭐' + levelCost(lv) + ' 레벨업</button>'
+        : '<div style="color:#ffd94a;font-size:11px;font-weight:800">👑 만렙!</div>');
     return '<div class="dex-card' + (n ? '' : ' locked') + '">' + charArt(c.id) +
       '<div style="font-weight:900">' + (n ? c.name : '???') + '</div>' +
       '<div style="font-size:12px;color:#ffd94a">' + c.stars + ' ' + c.rank + '</div>' +
+      lvHtml +
       '<div style="font-size:11px;color:#9c92c4;min-height:14px">' + (n ? c.desc : '') + '</div>' +
-      '<div class="dex-count">' + (n ? '보유 ' + n : '미획득') + '</div></div>';
+      '</div>';
   }).join('');
+  document.querySelectorAll('.lvl-btn').forEach(b => b.onclick = () => {
+    const id = b.dataset.id;
+    const lv = saveData.lv[id] || 1;
+    const cost = levelCost(lv);
+    if ((saveData.candy || 0) < cost) {
+      $('dex-progress').textContent = '⭐ 별사탕이 부족해! (' + (saveData.candy || 0) + '/' + cost + ') — 던전에서 모아와!';
+      return;
+    }
+    saveData.candy -= cost;
+    saveData.lv[id] = lv + 1;
+    persist(); refreshCandy(); renderDex();
+  });
   $('dex-progress').textContent = '캐릭터 수집률 ' + Math.round(owned / CHARS.length * 100) + '%' +
     (owned === CHARS.length ? ' — G의 비밀에 가까워지고 있다...' : '');
 }
@@ -1001,7 +1045,8 @@ function renderStages() {
     ? '<div style="color:#9c92c4;font-size:12px;align-self:center">출전:</div>' + owned.map(id =>
         '<div class="party-card' + (saveData.party === id ? ' sel' : '') + '" data-id="' + id + '">' +
         (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
-        '<div>' + HEROES[id].name + '</div></div>').join('')
+        '<div>' + HEROES[id].name + '</div>' +
+        '<div style="color:#7cf76a;font-size:10px">Lv.' + ((saveData.lv || {})[id] || 1) + '</div></div>').join('')
     : '<div style="color:#9c92c4;font-size:13px;align-self:center">아직 캐릭터가 없어! 🎰 뽑기에서 캐릭터를 뽑아와!</div>';
   document.querySelectorAll('.party-card').forEach(c => c.onclick = () => {
     saveData.party = c.dataset.id; persist(); renderStages();
@@ -1038,9 +1083,12 @@ function stagePool(n) { return n <= 3 ? ['slime'] : n <= 6 ? ['slime', 'bat'] : 
 function startStage(n) {
   mode = 'stage';
   const base = HEROES[saveData.party];
+  // 레벨 보정: 레벨당 공격력·체력 +8% (만렙 15 = 약 2.1배)
+  const lv = (saveData.lv || {})[saveData.party] || 1;
+  const statMult = 1 + 0.08 * (lv - 1);
   S = {
-    n, seg: 0, segTotal: segCount(n), heroId: saveData.party,
-    atk: base.atk, hp: base.hp, maxHp: base.hp,
+    n, seg: 0, segTotal: segCount(n), heroId: saveData.party, lv,
+    atk: Math.round(base.atk * statMult), hp: Math.round(base.hp * statMult), maxHp: Math.round(base.hp * statMult),
     gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
     hitCount: 0, over: false,
   };
@@ -1076,7 +1124,7 @@ function spawnHero() {
   S.heroEl = unitEl(
     (art ? '<img class="body" src="' + art + '" style="height:110px">' : '<div class="body" style="font-size:64px">🧑</div>') +
     '<div class="stun-mark">💫</div>' +
-    '<div class="name-tag">' + h.name + '</div>' +
+    '<div class="name-tag">' + h.name + ' Lv.' + S.lv + '</div>' +
     '<div class="hp-bar"><div class="hp-fill"></div></div>' +
     '<div class="hp-num">' + S.hp + ' / ' + S.maxHp + '</div>',
     { left: '9%', bottom: '22%', zIndex: 5 }
