@@ -1056,20 +1056,14 @@ $('pull-btn').onclick = () => {
     const isNew = !saveData.coll[pick.id];
     saveData.coll[pick.id] = (saveData.coll[pick.id] || 0) + 1;
     saveData.lv = saveData.lv || {};
-    // 중복 처리 (예준 기획): 중복 = 레벨업 (만렙 15), 만렙이면 별사탕으로 전환
+    // 중복 처리 (예준 기획 개편): 중복 레벨업 폐지 → 중복은 ⭐별사탕 +5로 교환
     let subText;
     if (isNew) {
       saveData.lv[pick.id] = 1;
       subText = '<span style="color:#7cf76a">NEW! 캐릭터 등록!</span>';
     } else {
-      const lv = saveData.lv[pick.id] || 1;
-      if (lv < 15) {
-        saveData.lv[pick.id] = lv + 1;
-        subText = '<span style="color:#ffd94a">중복! 레벨 업 → Lv.' + (lv + 1) + '</span>';
-      } else {
-        saveData.candy = (saveData.candy || 0) + 5;
-        subText = '<span style="color:#9c92c4">만렙이라 ⭐ 별사탕 +5</span>';
-      }
+      saveData.candy = (saveData.candy || 0) + 5;
+      subText = '<span style="color:#ffd94a">중복! ⭐ 별사탕 +5로 교환</span>';
     }
     persist(); refreshCandy();
 
@@ -1656,7 +1650,17 @@ function stageWin() {
   const candy = 4 + S.n, tickets = first ? 3 : 1;
   saveData.candy = (saveData.candy || 0) + candy;
   saveData.tickets += tickets;
-  if (first) saveData.cleared = [...(saveData.cleared || []), String(S.n)];
+  // 스토리 첫 클리어 = 출전 캐릭터 레벨 +1 (예준 기획: 스토리를 깨야 레벨이 오른다)
+  let lvHtml = '';
+  if (first) {
+    saveData.cleared = [...(saveData.cleared || []), String(S.n)];
+    saveData.lv = saveData.lv || {};
+    const curLv = saveData.lv[S.heroId] || 1;
+    if (curLv < 15) {
+      saveData.lv[S.heroId] = curLv + 1;
+      lvHtml = '<br>📈 <b style="color:#7cf76a">' + HEROES[S.heroId].name + ' 레벨 업! Lv.' + (curLv + 1) + '</b>';
+    }
+  }
   // 🎒 도구 드랍 (예준 기획: 도구는 던전 드랍) — 30%, 보스(1-10)는 확정. 다 모았으면 별사탕 +3
   let dropHtml = '';
   const unowned = Object.keys(ITEMS).filter(i => !saveData.items[i]);
@@ -1674,7 +1678,7 @@ function stageWin() {
   persist();
   if (ART.chest) { $('result-chest').src = ART.chest; $('result-chest').style.display = 'block'; }
   $('result-title').textContent = '🎉 1-' + S.n + ' 클리어!';
-  $('result-rewards').innerHTML = '⭐ 별사탕 +' + candy + '<br>🎟️ 뽑기권 +' + tickets + (first ? ' (첫 클리어!)' : '') + dropHtml;
+  $('result-rewards').innerHTML = '⭐ 별사탕 +' + candy + '<br>🎟️ 뽑기권 +' + tickets + (first ? ' (첫 클리어!)' : '') + lvHtml + dropHtml;
   $('result-actions').innerHTML = '<button class="result-action" id="result-ok">확인</button>';
   $('result-ok').onclick = exitStage;
   $('stage-result').classList.add('on');
