@@ -983,6 +983,9 @@ try {
   if (s && typeof s === 'object') saveData = Object.assign(saveData, s);
 } catch (e) {}
 function persist() { localStorage.setItem(SAVE_KEY, JSON.stringify(saveData)); }
+// 도구 보유 목록 (예준 기획: 도구는 던전 드랍). 예전 세이브에서 착용 중이던 도구는 보유 처리
+saveData.items = saveData.items || {};
+Object.values(saveData.equip || {}).forEach(i => { saveData.items[i] = true; });
 function refreshTickets() {
   document.querySelectorAll('.ticket-view').forEach(el => el.textContent = '🎟️ 뽑기권 ' + saveData.tickets + '장');
 }
@@ -1145,14 +1148,26 @@ function openItemPicker(charId) {
   const cur = (saveData.equip || {})[charId] || null;
   $('ip-grid').innerHTML =
     '<div class="ip-card' + (!cur ? ' sel' : '') + '" data-item=""><div style="font-size:32px">🚫</div><div style="font-weight:900;font-size:12px">없음</div></div>' +
-    Object.keys(ITEMS).map(iid =>
-      '<div class="ip-card' + (cur === iid ? ' sel' : '') + '" data-item="' + iid + '">' + itemArt(iid) +
-      '<div style="font-weight:900;font-size:12px">' + ITEMS[iid].name + '</div>' +
-      '<div style="font-size:10px;color:#9c92c4">' + ITEMS[iid].desc + '</div></div>').join('');
+    Object.keys(ITEMS).map(iid => {
+      const owned = !!saveData.items[iid];
+      // 도구는 1개 보유 = 1명 착용 (포켓몬처럼). 다른 캐릭터가 쓰는 중이면 표시
+      const holder = Object.entries(saveData.equip || {}).find(([c, it]) => it === iid && c !== charId);
+      const holderName = holder ? (CHARS.find(c => c.id === holder[0]) || {}).name : null;
+      return '<div class="ip-card' + (cur === iid ? ' sel' : '') + (owned ? '' : ' locked') + '" data-item="' + (owned ? iid : '') + '" style="' + (owned ? '' : 'filter:grayscale(1) brightness(.5);cursor:default') + '">' + itemArt(iid) +
+        '<div style="font-weight:900;font-size:12px">' + (owned ? ITEMS[iid].name : '???') + '</div>' +
+        '<div style="font-size:10px;color:#9c92c4">' + (owned ? ITEMS[iid].desc : '🎁 던전에서 드랍!') + '</div>' +
+        (holderName ? '<div style="font-size:10px;color:#ffd94a">' + holderName + ' 사용 중 → 뺏어오기</div>' : '') +
+        '</div>';
+    }).join('');
   document.querySelectorAll('.ip-card').forEach(c => c.onclick = () => {
+    if (!c.dataset.item && c.textContent.includes('던전에서')) return; // 미보유
     saveData.equip = saveData.equip || {};
-    if (c.dataset.item) saveData.equip[charId] = c.dataset.item;
-    else delete saveData.equip[charId];
+    const iid = c.dataset.item;
+    if (iid) {
+      // 다른 캐릭터가 착용 중이면 해제 (1개 = 1명)
+      Object.keys(saveData.equip).forEach(cid => { if (saveData.equip[cid] === iid) delete saveData.equip[cid]; });
+      saveData.equip[charId] = iid;
+    } else delete saveData.equip[charId];
     persist();
     $('item-picker').classList.remove('on');
     openCharDetail(charId);
@@ -1622,10 +1637,24 @@ function stageWin() {
   saveData.candy = (saveData.candy || 0) + candy;
   saveData.tickets += tickets;
   if (first) saveData.cleared = [...(saveData.cleared || []), String(S.n)];
+  // 🎒 도구 드랍 (예준 기획: 도구는 던전 드랍) — 30%, 보스(1-10)는 확정. 다 모았으면 별사탕 +3
+  let dropHtml = '';
+  const unowned = Object.keys(ITEMS).filter(i => !saveData.items[i]);
+  if (S.n === 10 || Math.random() < 0.3) {
+    if (unowned.length) {
+      const drop = unowned[Math.floor(Math.random() * unowned.length)];
+      saveData.items[drop] = true;
+      dropHtml = '<br><div style="margin-top:6px">🎁 <b style="color:#ffd94a">도구 획득: ' + ITEMS[drop].name + '!</b><br>' +
+        '<span style="font-size:12px;color:#9c92c4">' + ITEMS[drop].desc + '</span></div>';
+    } else {
+      saveData.candy += 3;
+      dropHtml = '<br>🎒 도구를 다 모아서 ⭐ 별사탕 +3 추가!';
+    }
+  }
   persist();
   if (ART.chest) { $('result-chest').src = ART.chest; $('result-chest').style.display = 'block'; }
   $('result-title').textContent = '🎉 1-' + S.n + ' 클리어!';
-  $('result-rewards').innerHTML = '⭐ 별사탕 +' + candy + '<br>🎟️ 뽑기권 +' + tickets + (first ? ' (첫 클리어!)' : '');
+  $('result-rewards').innerHTML = '⭐ 별사탕 +' + candy + '<br>🎟️ 뽑기권 +' + tickets + (first ? ' (첫 클리어!)' : '') + dropHtml;
   $('result-actions').innerHTML = '<button class="result-action" id="result-ok">확인</button>';
   $('result-ok').onclick = exitStage;
   $('stage-result').classList.add('on');
@@ -1675,12 +1704,15 @@ function renderPvpSetup() {
         '<div class="party-card' + (pvpSel[side] === id ? ' sel' : '') + '" data-side="' + side + '" data-id="' + id + '">' +
         (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
         '<div>' + ATTRS[HEROES[id].attr].icon + HEROES[id].name + '</div></div>').join('');
-    // 🎒 도구 선택 줄 (세팅! — 예준 기획)
+    // 🎒 도구 선택 줄 (세팅! — 던전에서 드랍한 도구만 사용 가능)
+    const ownedItems = Object.keys(ITEMS).filter(i => saveData.items[i]);
     $('pvp-item' + side).innerHTML =
       '<div class="side-label">🎒</div>' +
       '<div class="ip-mini' + (!pvpItemSel[side] ? ' sel' : '') + '" data-side="' + side + '" data-item="">🚫</div>' +
-      Object.keys(ITEMS).map(iid =>
-        '<div class="ip-mini' + (pvpItemSel[side] === iid ? ' sel' : '') + '" data-side="' + side + '" data-item="' + iid + '" title="' + ITEMS[iid].name + ': ' + ITEMS[iid].desc + '">' + itemArt(iid) + '</div>').join('') +
+      (ownedItems.length
+        ? ownedItems.map(iid =>
+            '<div class="ip-mini' + (pvpItemSel[side] === iid ? ' sel' : '') + '" data-side="' + side + '" data-item="' + iid + '" title="' + ITEMS[iid].name + ': ' + ITEMS[iid].desc + '">' + itemArt(iid) + '</div>').join('')
+        : '<div style="font-size:11px;color:#9c92c4">도구 없음 — 던전에서 드랍!</div>') +
       '<div style="font-size:11px;color:#ffd94a">' + (pvpItemSel[side] ? ITEMS[pvpItemSel[side]].name : '') + '</div>';
   });
   document.querySelectorAll('#pvp-screen .party-card').forEach(c => c.onclick = () => {
