@@ -75,6 +75,24 @@
   .pick-row[data-side="2"] .side-label { color: #ff9a9a; }
   .pick-row .party-card.sel { border-color: #ffd94a; }
   #pvp-start:disabled { filter: grayscale(1) brightness(.6); }
+  #pvp-picks { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+  #pvp-screen .party-card { width: 62px; padding: 4px; font-size: 10px; }
+  #pvp-screen .party-card img { max-width: 40px; max-height: 38px; }
+
+  /* ── 도구 선택 (장비 = 포켓몬 지닌물건 개념) ── */
+  .item-row { flex-wrap: wrap; justify-content: center; }
+  .ip-mini { width: 40px; height: 40px; border: 2px solid #5a4d8a; border-radius: 8px; background: #1a142e; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 17px; }
+  .ip-mini img { max-width: 30px; max-height: 30px; }
+  .ip-mini.sel { border-color: #ffd94a; box-shadow: 0 0 10px rgba(255,217,74,.5); }
+  #item-picker { position: absolute; inset: 0; z-index: 97; display: none; align-items: center; justify-content: center; background: rgba(10,6,22,.85); }
+  #item-picker.on { display: flex; }
+  #ip-box { max-width: 92%; max-height: 88%; overflow-y: auto; padding: 16px 20px; background: linear-gradient(180deg,#241d3d,#1a142e); border: 3px solid #5a4d8a; border-radius: 16px; text-align: center; }
+  #ip-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 560px; margin-bottom: 10px; }
+  .ip-card { width: 122px; padding: 8px; background: #141026; border: 2px solid #5a4d8a; border-radius: 10px; cursor: pointer; color: #e8e2ff; }
+  .ip-card img { max-width: 44px; max-height: 40px; }
+  .ip-card:active { transform: scale(.96); }
+  .ip-card.sel { border-color: #ffd94a; }
+  #cd-actions img { max-width: 40px; max-height: 40px; }
   .s-fighter.p2 img.body { transform: scaleX(-1); }
   .s-fighter.p1 .name-tag { color: #7cc4ff; }
   .s-fighter.p2 .name-tag { color: #ff9a9a; }
@@ -529,10 +547,14 @@
       <div class="sub-title">⚔️ 1대1 대결</div>
       <div class="ticket-chip">친선전</div>
     </div>
-    <div style="color:#9c92c4;font-size:12px">폰 하나로 친구랑! 지금은 모두 기본 스탯 (세팅 시스템은 준비 중)</div>
-    <div id="pvp-pick1" class="pick-row"></div>
-    <div style="color:#8f86b5;font-weight:900">VS</div>
-    <div id="pvp-pick2" class="pick-row"></div>
+    <div id="pvp-picks">
+      <div style="color:#9c9c4;font-size:12px;color:#9c92c4">폰 하나로 친구랑! 캐릭터 + 🎒도구(세팅)를 고르세요</div>
+      <div id="pvp-pick1" class="pick-row"></div>
+      <div id="pvp-item1" class="pick-row item-row"></div>
+      <div style="color:#8f86b5;font-weight:900">VS</div>
+      <div id="pvp-pick2" class="pick-row"></div>
+      <div id="pvp-item2" class="pick-row item-row"></div>
+    </div>
     <button id="pvp-start" class="stage-btn" style="width:auto;padding:12px 40px;margin:10px 0" disabled>대결 시작!</button>
   </div>
 
@@ -548,6 +570,13 @@
     </div>
     <div id="dex-grid"></div>
     <div id="dex-progress"></div>
+    <div id="item-picker">
+      <div id="ip-box">
+        <div style="color:#ffe9a0;font-weight:900;margin-bottom:8px">🎒 도구 고르기 (캐릭터당 1개)</div>
+        <div id="ip-grid"></div>
+        <button class="back-btn" id="ip-close">닫기</button>
+      </div>
+    </div>
     <div id="char-detail">
       <div id="cd-box">
         <button id="cd-close">✖</button>
@@ -610,6 +639,9 @@ loadArt('priest', 'character/priest');   // 첫사랑성직자 (뽑기·도감)
 // 아군 (뽑기 풀)
 loadArt('josun', 'character/josun');       // 조슨대왕 — 신하 소환 어태커
 loadArt('wolf', 'character/wolf');         // 백울프 — 확률 스턴
+// 도구 8종 (예준 그림)
+['boots','contract','darkblade','yellowcard','invitation','dagger','balloon','shovel']
+  .forEach(id => loadArt('item_' + id, 'character/item_' + id));
 // 아이템 (강화·보상 시스템에서 사용 예정)
 loadArt('candy', 'character/candy');       // 별사탕 — 업그레이드 재화
 loadArt('chest', 'character/chest');       // 던전 클리어 상자
@@ -1082,9 +1114,17 @@ function openCharDetail(id) {
       '<br>' + at.icon + ' <b>' + at.name + '</b> — ' + at.desc;
     $('cd-skill').textContent = '✨ ' + c.desc;
     $('cd-story').textContent = '“' + c.story + '”';
-    $('cd-actions').innerHTML = lv < 15
-      ? '<button class="lvl-btn" style="font-size:14px;padding:9px 18px" id="cd-lvlup">⭐' + levelCost(lv) + ' 레벨업</button>'
-      : '';
+    const equipped = (saveData.equip || {})[id] || null;
+    $('cd-actions').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px">' +
+        '<div>' + (equipped ? itemArt(equipped) : '') + '</div>' +
+        '<div style="font-size:12px;color:#e8e2ff">🎒 ' + (equipped ? ITEMS[equipped].name : '도구 없음') + '</div>' +
+        '<button class="lvl-btn" id="cd-equip-btn">바꾸기</button>' +
+      '</div>' +
+      (lv < 15
+        ? '<button class="lvl-btn" style="font-size:14px;padding:9px 18px" id="cd-lvlup">⭐' + levelCost(lv) + ' 레벨업</button>'
+        : '');
+    $('cd-equip-btn').onclick = () => openItemPicker(id);
     const btn = $('cd-lvlup');
     if (btn) btn.onclick = () => {
       const cost = levelCost(lv);
@@ -1100,6 +1140,27 @@ function openCharDetail(id) {
   }
   $('char-detail').classList.add('on');
 }
+// 🎒 도구 고르기 (예준 기획: 포켓몬 지닌물건 — 캐릭터당 1개, 지금은 자유 착용)
+function openItemPicker(charId) {
+  const cur = (saveData.equip || {})[charId] || null;
+  $('ip-grid').innerHTML =
+    '<div class="ip-card' + (!cur ? ' sel' : '') + '" data-item=""><div style="font-size:32px">🚫</div><div style="font-weight:900;font-size:12px">없음</div></div>' +
+    Object.keys(ITEMS).map(iid =>
+      '<div class="ip-card' + (cur === iid ? ' sel' : '') + '" data-item="' + iid + '">' + itemArt(iid) +
+      '<div style="font-weight:900;font-size:12px">' + ITEMS[iid].name + '</div>' +
+      '<div style="font-size:10px;color:#9c92c4">' + ITEMS[iid].desc + '</div></div>').join('');
+  document.querySelectorAll('.ip-card').forEach(c => c.onclick = () => {
+    saveData.equip = saveData.equip || {};
+    if (c.dataset.item) saveData.equip[charId] = c.dataset.item;
+    else delete saveData.equip[charId];
+    persist();
+    $('item-picker').classList.remove('on');
+    openCharDetail(charId);
+  });
+  $('item-picker').classList.add('on');
+}
+$('ip-close').onclick = () => $('item-picker').classList.remove('on');
+
 $('cd-close').onclick = () => $('char-detail').classList.remove('on');
 $('char-detail').onclick = e => { if (e.target.id === 'char-detail') $('char-detail').classList.remove('on'); };
 
@@ -1134,6 +1195,49 @@ const HEROES = {
   josun:   { name: '조슨대왕', atk: 85, hp: 280, skill: null, hasGauge: false, attr: '빛' }, // 패시브: 2타마다 신하 소환 · 속성: 예준 확정
   wolf:    { name: '백울프', atk: 90, hp: 270, skill: null, hasGauge: false, attr: '무' },   // 패시브: 25% 스턴 · 속성: 예준 확정
 };
+// ── 도구 (예준 기획: 포켓몬 지닌물건 개념, 캐릭터당 1개) ──
+const ITEMS = {
+  boots:      { name: '천년부츠',   desc: '딱 1번, 공격받으면 그 데미지의 절반을 반사' },
+  contract:   { name: '계약서',     desc: '내 체력이 30% 이하면 공격이 1.3배' },
+  darkblade:  { name: '암흑의 흑도', desc: '암속성 전용: 공격력 1.1배 + 다른 속성의 공격을 0.8배로 받음' },
+  yellowcard: { name: '옐로카드',   desc: '주는 데미지 1.6배, 대신 방어력 0.8배' },
+  invitation: { name: '초대장',     desc: '딱 1번, 상대의 공격을 침묵으로 무효화' },
+  dagger:     { name: '요술단검',   desc: '딱 1번, 공격이 2연타가 됨' },
+  balloon:    { name: '풍선',       desc: '상대 공격 1번 무시, 대신 내 공격은 0.5배' },
+  shovel:     { name: '삽',         desc: '속성 개념을 없애버림 (특성·상성 전부 무시)' },
+};
+function itemArt(id) { return ART['item_' + id] ? '<img src="' + ART['item_' + id] + '" alt="">' : '🎒'; }
+
+// 공격자 쪽 도구 배수
+function itemAtkMult(f) {
+  let m = 1;
+  if (f.item === 'yellowcard') m *= 1.6;
+  if (f.item === 'balloon') m *= 0.5;
+  if (f.item === 'contract' && f.hp <= f.maxHp * 0.3) m *= 1.3;
+  if (f.item === 'darkblade' && f.attr === '암') m *= 1.1;
+  return m;
+}
+// 수비자 쪽 도구 처리 → { dmg, negateMsg, reflectRatio }
+function itemDefend(f, attackerAttr, dmg) {
+  f.used = f.used || {};
+  if (f.item === 'invitation' && !f.used.invitation) {
+    f.used.invitation = true;
+    return { dmg: 0, negateMsg: '🤫 침묵!' };
+  }
+  if (f.item === 'balloon' && !f.used.balloon) {
+    f.used.balloon = true;
+    return { dmg: 0, negateMsg: '🎈 무시!' };
+  }
+  let m = 1;
+  if (f.item === 'yellowcard') m *= 1.25; // 방어력 0.8배 = 받는 데미지 1.25배
+  if (f.item === 'darkblade' && f.attr === '암' && attackerAttr !== '암') m *= 0.8;
+  let reflectRatio = 0;
+  if (f.item === 'boots' && !f.used.boots) { f.used.boots = true; reflectRatio = 0.5; }
+  return { dmg: Math.round(dmg * m), reflectRatio };
+}
+// 삽: 이 싸움에 삽 든 쪽이 있으면 속성 계산 전부 무시
+function shovelIn(a, b) { return (a && a.item === 'shovel') || (b && b.item === 'shovel'); }
+
 const MONSTERS = {
   slime:    { name: '슬라임', hp: 60, atk: 8, size: 78, attr: '수' },              // 속성: 예준 확정
   bat:      { name: '박쥐', hp: 45, atk: 10, size: 70, attr: '암' },               // 제1지역은 초보 구간 → 공격력 흡수 없음 (예준 기획) · 속성: 예준 확정
@@ -1177,7 +1281,8 @@ function renderStages() {
       (unlocked ? '1-' + i + (done ? ' ⭐' : '') + (i === 10 ? ' 👑' : '') : '🔒') + '</button>';
   }
   $('stage-grid').innerHTML = html;
-  document.querySelectorAll('.stage-btn').forEach(b => b.onclick = () => {
+  // #stage-grid 안의 버튼만! (pvp-start도 .stage-btn 스타일을 쓰므로 전역 선택 금지)
+  document.querySelectorAll('#stage-grid .stage-btn').forEach(b => b.onclick = () => {
     if (b.classList.contains('locked')) { $('stage-msg').textContent = '이전 스테이지를 먼저 깨야 해!'; return; }
     if (b.dataset.stage === 'tut') return startTutorial();
     if (!saveData.party) { $('stage-msg').textContent = '캐릭터가 없어! 🎰 뽑기 먼저!'; return; }
@@ -1205,6 +1310,7 @@ function startStage(n) {
   const attr = base.attr || '무';
   S = {
     n, seg: 0, segTotal: segCount(n), heroId: saveData.party, lv, attr,
+    item: (saveData.equip || {})[saveData.party] || null, used: {},
     // 속성 보정: 공격력 (수 0.8배, 암 1.4배) · 체력 (빛 1.2배)
     atk: Math.round(base.atk * statMult * ATTRS[attr].atk),
     hp: Math.round(base.hp * statMult * (ATTRS[attr].hpMult || 1)),
@@ -1311,23 +1417,34 @@ function stageAttack() {
     S.heroEl.classList.remove('lunge');
     dropBolt(target.el);
     setTimeout(() => {
-      // 버프 (주술/변신) 적용
+      // 버프 (주술/변신) + 도구 배수 적용
       const buffed = Date.now() < S.buffUntil ? S.buffMult : 1;
-      let dmg = Math.round(S.atk * (0.9 + Math.random() * 0.2) * buffed);
+      const noAttr = shovelIn(S, null); // 🥄 삽: 속성 개념 무시
+      let dmg = Math.round(S.atk * (0.9 + Math.random() * 0.2) * buffed * itemAtkMult(S));
       // 화속성 특성: 5% 확률로 데미지 2배 (예준 기획)
       let fireProc = false;
-      if (ATTRS[S.attr].proc2x && Math.random() < ATTRS[S.attr].proc2x) {
+      if (!noAttr && ATTRS[S.attr].proc2x && Math.random() < ATTRS[S.attr].proc2x) {
         dmg *= 2; fireProc = true;
         popDmg(S.heroEl, '🔥 2배!!', 'ult');
       }
       // 포켓몬식 상성: 카운터 1.5배 / 역카운터 0.7배 (몬스터에 속성이 있을 때만)
       const tAttr = MONSTERS[target.type].attr;
-      if (tAttr) {
+      if (tAttr && !noAttr) {
         if ((COUNTER[S.attr] || []).includes(tAttr)) { dmg = Math.round(dmg * 1.5); popDmg(S.heroEl, '효과 굉장!', 'crit'); }
         else if ((COUNTER[tAttr] || []).includes(S.attr)) { dmg = Math.round(dmg * 0.7); }
       }
       S.hitCount++;
       hitEnemy(target, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
+      // 🗡️ 요술단검: 딱 1번 2연타
+      if (S.item === 'dagger' && !S.used.dagger) {
+        S.used.dagger = true;
+        setTimeout(() => {
+          if (S.over || target.hp <= 0) return;
+          dropBolt(target.el);
+          popDmg(S.heroEl, '🗡️ 2연타!', 'tickle');
+          hitEnemy(target, dmg, 'crit');
+        }, 330);
+      }
 
       // 조슨대왕 패시브: 2타마다 신하 소환 (예준 기획)
       if (S.heroId === 'josun' && S.hitCount % 2 === 0) {
@@ -1396,21 +1513,42 @@ function enemyCounters() {
       e.el.classList.add('elunge');
       setTimeout(() => e.el.classList.remove('elunge'), 250);
       let dmg = e.atk * (0.9 + Math.random() * 0.2);
-      // 속성 방어 보정: 수 1.3배 수비 / 암 0.7배 수비
-      dmg = dmg / ATTRS[S.attr].def;
-      // 무속성 특성: 화·수속성의 공격을 0.7배로 받음 / 빛속성: 암속성 공격 0.7배로 받음
       const mAttr = MONSTERS[e.type].attr;
-      if (mAttr) {
-        if (S.attr === '무' && (mAttr === '화' || mAttr === '수')) dmg *= 0.7;
-        if (S.attr === '빛' && mAttr === '암') dmg *= 0.7;
-        // 몬스터 쪽 상성도 적용
-        if ((COUNTER[mAttr] || []).includes(S.attr)) dmg *= 1.5;
-        else if ((COUNTER[S.attr] || []).includes(mAttr)) dmg *= 0.7;
+      if (!shovelIn(S, null)) { // 🥄 삽이면 속성 계산 전부 생략
+        // 속성 방어 보정: 수 1.3배 수비 / 암 0.7배 수비
+        dmg = dmg / ATTRS[S.attr].def;
+        // 무속성 특성: 화·수속성의 공격을 0.7배로 받음 / 빛속성: 암속성 공격 0.7배로 받음
+        if (mAttr) {
+          if (S.attr === '무' && (mAttr === '화' || mAttr === '수')) dmg *= 0.7;
+          if (S.attr === '빛' && mAttr === '암') dmg *= 0.7;
+          // 몬스터 쪽 상성도 적용
+          if ((COUNTER[mAttr] || []).includes(S.attr)) dmg *= 1.5;
+          else if ((COUNTER[S.attr] || []).includes(mAttr)) dmg *= 0.7;
+        }
       }
       dmg = Math.round(dmg);
-      S.hp -= dmg;
-      popDmg(S.heroEl, dmg, 'heropain');
-      if (e.poison) { S.hp -= e.poison; popDmg(S.heroEl, '☠️' + e.poison, 'tickle'); }
+      // 🎒 방어 도구 처리 (침묵·풍선 무효 / 옐로카드·흑도 배수 / 부츠 반사)
+      const dd = itemDefend(S, mAttr || '무', dmg);
+      if (dd.negateMsg) {
+        popDmg(S.heroEl, dd.negateMsg, 'tickle');
+      } else {
+        dmg = dd.dmg;
+        S.hp -= dmg;
+        popDmg(S.heroEl, dmg, 'heropain');
+        if (dd.reflectRatio) {
+          const r = Math.max(1, Math.round(dmg * dd.reflectRatio));
+          e.hp -= r; setUnitHp(e);
+          popDmg(e.el, '🥾 반사 ' + r, 'crit');
+          if (e.hp <= 0) {
+            e.el.classList.add('dead');
+            if (S.enemies.every(x => x.hp <= 0)) {
+              if (S.seg >= S.segTotal) setTimeout(stageWin, 500);
+              else setTimeout(nextSegment, 700);
+            }
+          }
+        }
+        if (e.poison) { S.hp -= e.poison; popDmg(S.heroEl, '☠️' + e.poison, 'tickle'); }
+      }
       setHeroHp();
       S.heroEl.classList.add('hurt');
       setTimeout(() => S.heroEl.classList.remove('hurt'), 300);
@@ -1527,6 +1665,7 @@ $('flee-btn').onclick = () => {
 
 let P = null;
 const pvpSel = { 1: null, 2: null };
+const pvpItemSel = { 1: null, 2: null };
 
 function renderPvpSetup() {
   [1, 2].forEach(side => {
@@ -1536,9 +1675,20 @@ function renderPvpSetup() {
         '<div class="party-card' + (pvpSel[side] === id ? ' sel' : '') + '" data-side="' + side + '" data-id="' + id + '">' +
         (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
         '<div>' + ATTRS[HEROES[id].attr].icon + HEROES[id].name + '</div></div>').join('');
+    // 🎒 도구 선택 줄 (세팅! — 예준 기획)
+    $('pvp-item' + side).innerHTML =
+      '<div class="side-label">🎒</div>' +
+      '<div class="ip-mini' + (!pvpItemSel[side] ? ' sel' : '') + '" data-side="' + side + '" data-item="">🚫</div>' +
+      Object.keys(ITEMS).map(iid =>
+        '<div class="ip-mini' + (pvpItemSel[side] === iid ? ' sel' : '') + '" data-side="' + side + '" data-item="' + iid + '" title="' + ITEMS[iid].name + ': ' + ITEMS[iid].desc + '">' + itemArt(iid) + '</div>').join('') +
+      '<div style="font-size:11px;color:#ffd94a">' + (pvpItemSel[side] ? ITEMS[pvpItemSel[side]].name : '') + '</div>';
   });
   document.querySelectorAll('#pvp-screen .party-card').forEach(c => c.onclick = () => {
     pvpSel[c.dataset.side] = c.dataset.id;
+    renderPvpSetup();
+  });
+  document.querySelectorAll('#pvp-screen .ip-mini').forEach(c => c.onclick = () => {
+    pvpItemSel[c.dataset.side] = c.dataset.item || null;
     renderPvpSetup();
   });
   $('pvp-start').disabled = !(pvpSel[1] && pvpSel[2]);
@@ -1554,6 +1704,7 @@ function mkPvpFighter(id, side) {
     maxHp: Math.round(base.hp * (ATTRS[attr].hpMult || 1)),
     gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
     hitCount: 0, stunNext: false, el: null,
+    item: pvpItemSel[side] || null, used: {},
   };
 }
 
@@ -1615,14 +1766,16 @@ function updatePvpTurnUI() {
 // 속성 특성 + 상성을 전부 반영한 PvP 데미지 계산
 function pvpDamage(A, D, raw) {
   let dmg = raw;
-  // 상성: 카운터 1.5배 / 역카운터 0.7배
-  if ((COUNTER[A.attr] || []).includes(D.attr)) { dmg *= 1.5; popDmg(A.el, '효과 굉장!', 'crit'); }
-  else if ((COUNTER[D.attr] || []).includes(A.attr)) dmg *= 0.7;
-  // 방어 특성: 수 1.3배 수비 / 암 0.7배 수비
-  dmg = dmg / ATTRS[D.attr].def;
-  // 무속성: 화·수 공격 0.7배로 / 빛속성: 암 공격 0.7배로
-  if (D.attr === '무' && (A.attr === '화' || A.attr === '수')) dmg *= 0.7;
-  if (D.attr === '빛' && A.attr === '암') dmg *= 0.7;
+  if (!shovelIn(A, D)) { // 🥄 삽 든 쪽이 있으면 속성 계산 전부 생략
+    // 상성: 카운터 1.5배 / 역카운터 0.7배
+    if ((COUNTER[A.attr] || []).includes(D.attr)) { dmg *= 1.5; popDmg(A.el, '효과 굉장!', 'crit'); }
+    else if ((COUNTER[D.attr] || []).includes(A.attr)) dmg *= 0.7;
+    // 방어 특성: 수 1.3배 수비 / 암 0.7배 수비
+    dmg = dmg / ATTRS[D.attr].def;
+    // 무속성: 화·수 공격 0.7배로 / 빛속성: 암 공격 0.7배로
+    if (D.attr === '무' && (A.attr === '화' || A.attr === '수')) dmg *= 0.7;
+    if (D.attr === '빛' && A.attr === '암') dmg *= 0.7;
+  }
   return Math.max(1, Math.round(dmg));
 }
 
@@ -1637,19 +1790,47 @@ function pvpAttack() {
     dropBolt(D.el);
     setTimeout(() => {
       const buffed = Date.now() < A.buffUntil ? A.buffMult : 1;
-      let raw = A.atk * (0.9 + Math.random() * 0.2) * buffed;
+      let raw = A.atk * (0.9 + Math.random() * 0.2) * buffed * itemAtkMult(A);
       let fireProc = false;
-      if (ATTRS[A.attr].proc2x && Math.random() < ATTRS[A.attr].proc2x) {
+      if (!shovelIn(A, D) && ATTRS[A.attr].proc2x && Math.random() < ATTRS[A.attr].proc2x) {
         raw *= 2; fireProc = true;
         popDmg(A.el, '🔥 2배!!', 'ult');
       }
-      const dmg = pvpDamage(A, D, raw);
-      D.hp -= dmg;
-      setPvpHp(D);
-      popDmg(D.el, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
-      D.el.classList.add('hurt');
-      $('arena').classList.add('shake');
-      setTimeout(() => { D.el.classList.remove('hurt'); $('arena').classList.remove('shake'); }, 300);
+      let dmg = pvpDamage(A, D, raw);
+      // 🎒 방어 도구 (침묵·풍선 무효 / 옐로카드·흑도 배수 / 부츠 반사)
+      const dd = itemDefend(D, A.attr, dmg);
+      if (dd.negateMsg) {
+        dmg = 0;
+        popDmg(D.el, dd.negateMsg, 'tickle');
+      } else {
+        dmg = dd.dmg;
+        D.hp -= dmg;
+        setPvpHp(D);
+        popDmg(D.el, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
+        D.el.classList.add('hurt');
+        $('arena').classList.add('shake');
+        setTimeout(() => { D.el.classList.remove('hurt'); $('arena').classList.remove('shake'); }, 300);
+        if (dd.reflectRatio) {
+          const r = Math.max(1, Math.round(dmg * dd.reflectRatio));
+          A.hp -= r;
+          setPvpHp(A);
+          popDmg(A.el, '🥾 반사 ' + r, 'crit');
+          if (A.hp <= 0) return pvpEnd(D);
+        }
+        // 🗡️ 요술단검: 딱 1번 2연타
+        if (A.item === 'dagger' && !A.used.dagger && D.hp > 0 && dmg > 0) {
+          A.used.dagger = true;
+          setTimeout(() => {
+            if (P.over || D.hp <= 0) return;
+            dropBolt(D.el);
+            popDmg(A.el, '🗡️ 2연타!', 'tickle');
+            D.hp -= dmg;
+            setPvpHp(D);
+            popDmg(D.el, dmg, 'crit');
+            if (D.hp <= 0) pvpEnd(A);
+          }, 330);
+        }
+      }
       A.hitCount++;
 
       // 조슨대왕 패시브: 2타마다 신하 추가타 (60%)
