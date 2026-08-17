@@ -1219,7 +1219,7 @@ const ITEMS = {
   invitation: { name: '초대장',     desc: '딱 1번, 상대의 공격을 침묵으로 무효화' },
   dagger:     { name: '요술단검',   desc: '딱 1번, 공격이 2연타가 됨' },
   balloon:    { name: '풍선',       desc: '상대 공격 1번 무시, 대신 내 공격은 0.5배' },
-  shovel:     { name: '삽',         desc: '속성 개념을 없애버림 (특성·상성 전부 무시)' },
+  shovel:     { name: '삽',         desc: '무상성 완전체: 속성 개념을 통째로 없앰 (특성·상성·스탯 배수 전부)' },
 };
 function itemArt(id) { return ART['item_' + id] ? '<img src="' + ART['item_' + id] + '" alt="">' : '🎒'; }
 
@@ -1323,13 +1323,17 @@ function startStage(n) {
   const lv = (saveData.lv || {})[saveData.party] || 1;
   const statMult = 1 + 0.08 * (lv - 1);
   const attr = base.attr || '무';
+  const heroItem = (saveData.equip || {})[saveData.party] || null;
+  // 🥄 삽 = 무상성 완전체 (예준 확정): 속성 스탯 배수까지 전부 1배
+  const aMul = heroItem === 'shovel' ? 1 : ATTRS[attr].atk;
+  const hMul = heroItem === 'shovel' ? 1 : (ATTRS[attr].hpMult || 1);
   S = {
     n, seg: 0, segTotal: segCount(n), heroId: saveData.party, lv, attr,
-    item: (saveData.equip || {})[saveData.party] || null, used: {},
+    item: heroItem, used: {},
     // 속성 보정: 공격력 (수 0.8배, 암 1.4배) · 체력 (빛 1.2배)
-    atk: Math.round(base.atk * statMult * ATTRS[attr].atk),
-    hp: Math.round(base.hp * statMult * (ATTRS[attr].hpMult || 1)),
-    maxHp: Math.round(base.hp * statMult * (ATTRS[attr].hpMult || 1)),
+    atk: Math.round(base.atk * statMult * aMul),
+    hp: Math.round(base.hp * statMult * hMul),
+    maxHp: Math.round(base.hp * statMult * hMul),
     gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
     hitCount: 0, over: false,
   };
@@ -1729,11 +1733,15 @@ function renderPvpSetup() {
 function mkPvpFighter(id, side) {
   const base = HEROES[id];
   const attr = base.attr || '무';
+  const item = pvpItemSel[side] || null;
+  // 🥄 삽 = 무상성 완전체: 스탯 배수도 전부 1배
+  const aMul = item === 'shovel' ? 1 : ATTRS[attr].atk;
+  const hMul = item === 'shovel' ? 1 : (ATTRS[attr].hpMult || 1);
   return {
     id, side, attr,
-    atk: Math.round(base.atk * ATTRS[attr].atk),
-    hp: Math.round(base.hp * (ATTRS[attr].hpMult || 1)),
-    maxHp: Math.round(base.hp * (ATTRS[attr].hpMult || 1)),
+    atk: Math.round(base.atk * aMul),
+    hp: Math.round(base.hp * hMul),
+    maxHp: Math.round(base.hp * hMul),
     gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
     hitCount: 0, stunNext: false, el: null,
     item: pvpItemSel[side] || null, used: {},
