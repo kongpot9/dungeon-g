@@ -318,7 +318,8 @@
   .menu-btn { padding: 10px 22px; font-size: 16px; font-weight: 800; color: #e8e2ff; background: #241d3d; border: 2px solid #5a4d8a; border-radius: 12px; cursor: pointer; }
   .menu-btn:active { transform: translateY(2px); }
 
-  #gacha-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+  #gacha-stage { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+  #gacha-stage.showing-result #summon-circle { display: none; } /* 결과 카드 뜰 땐 상자 숨김 (모바일 세로공간 확보) */
   #pickup-banner {
     display: flex; align-items: center; gap: 12px; padding: 8px 16px;
     background: linear-gradient(90deg, #2a2240, #1a142e);
@@ -354,6 +355,18 @@
   #pull-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #8a5a14; }
   #pull-btn:disabled { filter: grayscale(.8) brightness(.6); }
   #rate-info { color: #6c6394; font-size: 11px; padding-bottom: 8px; }
+
+  /* 낮은 화면(폰 가로)에서 뽑기 화면 컴팩트하게 — 뽑기 버튼이 항상 보이게 (제보: 구예준) */
+  @media (max-height: 430px) {
+    #pickup-banner { padding: 5px 10px; gap: 8px; }
+    #pickup-img { height: 36px; }
+    #summon-circle { width: 90px; height: 90px; font-size: 38px; }
+    #gacha-stage { gap: 6px; }
+    #result-card { width: 150px; padding: 8px; }
+    #result-card img { max-width: 96px; max-height: 74px; }
+    #pull-btn { padding: 10px 34px; font-size: 17px; margin-bottom: 10px; }
+    #rate-info { padding-bottom: 4px; font-size: 10px; }
+  }
 
   #dex-grid { flex: 1; display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 10px; }
   .dex-card { width: 142px; padding: 12px; border-radius: 14px; background: #1a142e; border: 3px solid #5a4d8a; text-align: center; color: #e8e2ff; }
@@ -1029,6 +1042,7 @@ $('pull-btn').onclick = () => {
   const pick = r < 3 ? CHARS[3] : r < 30 ? CHARS[2] : r < 65 ? CHARS[1] : CHARS[0];
 
   $('gacha-result').classList.remove('on');
+  $('gacha-stage').classList.remove('showing-result');
   $('gacha-msg').textContent = '';
   const circle = $('summon-circle');
   circle.textContent = '✨';
@@ -1066,6 +1080,7 @@ $('pull-btn').onclick = () => {
       '<div style="color:#ffd94a;font-size:13px">' + pick.stars + ' ' + pick.rank + '</div>' +
       '<div style="font-size:12px">' + subText + '</div>';
     $('gacha-result').classList.add('on');
+    $('gacha-stage').classList.add('showing-result');
     if (legendary) $('gacha-msg').textContent = '"...다시 만났군." — 드래베오';
     pulling = false;
   }, legendary ? 2800 : 1400);
@@ -1181,6 +1196,7 @@ $('char-detail').onclick = e => { if (e.target.id === 'char-detail') $('char-det
 
 $('gacha-open').onclick = () => {
   $('gacha-result').classList.remove('on');
+  $('gacha-stage').classList.remove('showing-result');
   $('gacha-msg').textContent = '';
   if (ART.legend) $('pickup-img').src = ART.legend; // 픽업 배너에 드래베오 전시
   refreshTickets();
