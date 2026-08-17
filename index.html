@@ -1050,7 +1050,7 @@ function openCharDetail(id) {
     $('cd-rank').textContent = c.stars + ' ' + c.rank;
     $('cd-lv').textContent = 'Lv.' + lv + ' / 15' + (lv >= 15 ? ' 👑 만렙!' : '');
     const at = ATTRS[h.attr || '무'];
-    $('cd-stats').innerHTML = '⚔️ 공격력 ' + Math.round(h.atk * mult * at.atk) + ' &nbsp;&nbsp; ❤️ 체력 ' + Math.round(h.hp * mult) +
+    $('cd-stats').innerHTML = '⚔️ 공격력 ' + Math.round(h.atk * mult * at.atk) + ' &nbsp;&nbsp; ❤️ 체력 ' + Math.round(h.hp * mult * (at.hpMult || 1)) +
       '<br>' + at.icon + ' <b>' + at.name + '</b> — ' + at.desc;
     $('cd-skill').textContent = '✨ ' + c.desc;
     $('cd-story').textContent = '“' + c.story + '”';
@@ -1095,12 +1095,16 @@ const ATTRS = {
   화: { icon: '🔥', name: '화속성', desc: '공격 중 5% 확률로 데미지 2배!', atk: 1, def: 1, proc2x: 0.05 },
   수: { icon: '💧', name: '수속성', desc: '수비력 1.3배, 대신 공격력 0.8배', atk: 0.8, def: 1.3 },
   암: { icon: '🌑', name: '암속성', desc: '공격력 1.4배, 대신 방어력 0.7배', atk: 1.4, def: 0.7 },
+  빛: { icon: '✨', name: '빛속성', desc: '체력 1.2배. 암속성 공격을 0.7배로 받음 (특성 임시 — 예준 확정 대기)', atk: 1, def: 1, hpMult: 1.2 },
 };
+// 포켓몬식 카운터 순환 (예준 승인 대기 초안): 수→화→암→무→수, 빛↔암 상호
+// 카운터 공격 1.5배 / 역카운터 공격 0.7배
+const COUNTER = { 수: ['화'], 화: ['암'], 암: ['무', '빛'], 무: ['수'], 빛: ['암'] };
 const HEROES = {
   draebeo: { name: '드래베오', atk: 120, hp: 300, skill: '🐉 변신', hasGauge: true, attr: '화' },
-  priest:  { name: '첫사랑성직자', atk: 70, hp: 260, skill: '🔮 주술', hasGauge: true, attr: '무' },  // 속성: 예준 배정 대기
-  josun:   { name: '조슨대왕', atk: 85, hp: 280, skill: null, hasGauge: false, attr: '무' }, // 패시브: 2타마다 신하 소환 · 속성: 예준 배정 대기
-  wolf:    { name: '백울프', atk: 90, hp: 270, skill: null, hasGauge: false, attr: '무' },   // 패시브: 25% 스턴 · 속성: 예준 배정 대기
+  priest:  { name: '첫사랑성직자', atk: 70, hp: 260, skill: '🔮 주술', hasGauge: true, attr: '암' },  // 속성: 예준 확정
+  josun:   { name: '조슨대왕', atk: 85, hp: 280, skill: null, hasGauge: false, attr: '빛' }, // 패시브: 2타마다 신하 소환 · 속성: 예준 확정
+  wolf:    { name: '백울프', atk: 90, hp: 270, skill: null, hasGauge: false, attr: '무' },   // 패시브: 25% 스턴 · 속성: 예준 확정
 };
 const MONSTERS = {
   slime:    { name: '슬라임', hp: 60, atk: 8, size: 78 },
@@ -1173,9 +1177,10 @@ function startStage(n) {
   const attr = base.attr || '무';
   S = {
     n, seg: 0, segTotal: segCount(n), heroId: saveData.party, lv, attr,
-    // 속성 공격력 보정 (수 0.8배, 암 1.4배)
+    // 속성 보정: 공격력 (수 0.8배, 암 1.4배) · 체력 (빛 1.2배)
     atk: Math.round(base.atk * statMult * ATTRS[attr].atk),
-    hp: Math.round(base.hp * statMult), maxHp: Math.round(base.hp * statMult),
+    hp: Math.round(base.hp * statMult * (ATTRS[attr].hpMult || 1)),
+    maxHp: Math.round(base.hp * statMult * (ATTRS[attr].hpMult || 1)),
     gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
     hitCount: 0, over: false,
   };
@@ -1287,6 +1292,12 @@ function stageAttack() {
         dmg *= 2; fireProc = true;
         popDmg(S.heroEl, '🔥 2배!!', 'ult');
       }
+      // 포켓몬식 상성: 카운터 1.5배 / 역카운터 0.7배 (몬스터에 속성이 있을 때만)
+      const tAttr = MONSTERS[target.type].attr;
+      if (tAttr) {
+        if ((COUNTER[S.attr] || []).includes(tAttr)) { dmg = Math.round(dmg * 1.5); popDmg(S.heroEl, '효과 굉장!', 'crit'); }
+        else if ((COUNTER[tAttr] || []).includes(S.attr)) { dmg = Math.round(dmg * 0.7); }
+      }
       S.hitCount++;
       hitEnemy(target, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
 
@@ -1359,9 +1370,15 @@ function enemyCounters() {
       let dmg = e.atk * (0.9 + Math.random() * 0.2);
       // 속성 방어 보정: 수 1.3배 수비 / 암 0.7배 수비
       dmg = dmg / ATTRS[S.attr].def;
-      // 무속성 특성: 화·수속성의 공격을 0.7배로 받음 (몬스터 속성 생기면 발동)
-      const mAttr = MONSTERS[e.type].attr || '무';
-      if (S.attr === '무' && (mAttr === '화' || mAttr === '수')) dmg *= 0.7;
+      // 무속성 특성: 화·수속성의 공격을 0.7배로 받음 / 빛속성: 암속성 공격 0.7배로 받음
+      const mAttr = MONSTERS[e.type].attr;
+      if (mAttr) {
+        if (S.attr === '무' && (mAttr === '화' || mAttr === '수')) dmg *= 0.7;
+        if (S.attr === '빛' && mAttr === '암') dmg *= 0.7;
+        // 몬스터 쪽 상성도 적용
+        if ((COUNTER[mAttr] || []).includes(S.attr)) dmg *= 1.5;
+        else if ((COUNTER[S.attr] || []).includes(mAttr)) dmg *= 0.7;
+      }
       dmg = Math.round(dmg);
       S.hp -= dmg;
       popDmg(S.heroEl, dmg, 'heropain');
