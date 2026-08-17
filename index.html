@@ -68,6 +68,17 @@
   .stage-btn.locked { filter: grayscale(1) brightness(.55); cursor: default; }
   .stage-btn.boss { background: linear-gradient(180deg, #ff9a6a, #d63920); color: #fff; box-shadow: 0 4px 0 #7e1a0a; }
 
+  /* ── 1대1 대결 ── */
+  .pick-row { display: flex; gap: 8px; align-items: center; }
+  .pick-row .side-label { font-size: 13px; font-weight: 900; width: 30px; }
+  .pick-row[data-side="1"] .side-label { color: #7cc4ff; }
+  .pick-row[data-side="2"] .side-label { color: #ff9a9a; }
+  .pick-row .party-card.sel { border-color: #ffd94a; }
+  #pvp-start:disabled { filter: grayscale(1) brightness(.6); }
+  .s-fighter.p2 img.body { transform: scaleX(-1); }
+  .s-fighter.p1 .name-tag { color: #7cc4ff; }
+  .s-fighter.p2 .name-tag { color: #ff9a9a; }
+
   /* ── 스테이지 전투 ── */
   .stage-mode .fighter { display: none !important; }
   .stage-mode #dialogue { display: none; }
@@ -388,6 +399,7 @@
     <div style="display:flex; gap:10px;">
       <button class="menu-btn" id="gacha-open">🎰 뽑기</button>
       <button class="menu-btn" id="dex-open">📖 캐릭터</button>
+      <button class="menu-btn" id="pvp-open">⚔️ 대결</button>
     </div>
     <div class="ticket-chip ticket-view"></div>
     <div id="title-studio">구예준 스튜디오</div>
@@ -508,6 +520,20 @@
     <div id="party-row"></div>
     <div id="stage-grid"></div>
     <div id="stage-msg" style="color:#9c92c4;font-size:12px;min-height:16px;padding-bottom:10px"></div>
+  </div>
+
+  <!-- 1대1 대결 셋업 -->
+  <div id="pvp-screen" class="sub-screen">
+    <div class="sub-head">
+      <button class="back-btn">← 뒤로</button>
+      <div class="sub-title">⚔️ 1대1 대결</div>
+      <div class="ticket-chip">친선전</div>
+    </div>
+    <div style="color:#9c92c4;font-size:12px">폰 하나로 친구랑! 지금은 모두 기본 스탯 (세팅 시스템은 준비 중)</div>
+    <div id="pvp-pick1" class="pick-row"></div>
+    <div style="color:#8f86b5;font-weight:900">VS</div>
+    <div id="pvp-pick2" class="pick-row"></div>
+    <button id="pvp-start" class="stage-btn" style="width:auto;padding:12px 40px;margin:10px 0" disabled>대결 시작!</button>
   </div>
 
   <!-- 도감 -->
@@ -802,6 +828,7 @@ function dropBolt(targetEl) {
 // ── 공격 ──
 $('atk-btn').onclick = () => {
   if (mode === 'stage') return stageAttack();
+  if (mode === 'pvp') return pvpAttack();
   if (busy) return;
   busy = true; $('atk-btn').disabled = true;
   $('legend').classList.add('lunge');
@@ -883,6 +910,7 @@ $('atk-btn').onclick = () => {
 // 🐉 변신 버튼 (예준 기획: 필살기 = 정룡술사 변신)
 $('ult-btn').onclick = () => {
   if (mode === 'stage') return stageSkill();
+  if (mode === 'pvp') return pvpSkill();
   if (busy) return;
   busy = true; $('ult-btn').disabled = true; $('ult-btn').classList.remove('on');
 
@@ -1489,7 +1517,236 @@ function exitStage() {
   renderStages();
   $('stage-screen').classList.add('on');
 }
-$('flee-btn').onclick = () => { if (mode === 'stage') exitStage(); };
+$('flee-btn').onclick = () => {
+  if (mode === 'stage') exitStage();
+  else if (mode === 'pvp') exitPvp();
+};
+
+// ═══════════ 1대1 대결 v1 — 폰 하나로 친구랑 턴제 배틀 (기획: 구예준) ═══════════
+// 친선전: 모든 캐릭터 기본 스탯 (세팅 시스템은 예준이 설계 중 — 나오면 여기 연결)
+
+let P = null;
+const pvpSel = { 1: null, 2: null };
+
+function renderPvpSetup() {
+  [1, 2].forEach(side => {
+    $('pvp-pick' + side).innerHTML =
+      '<div class="side-label">' + (side === 1 ? '🔵 1P' : '🔴 2P') + '</div>' +
+      Object.keys(HEROES).map(id =>
+        '<div class="party-card' + (pvpSel[side] === id ? ' sel' : '') + '" data-side="' + side + '" data-id="' + id + '">' +
+        (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
+        '<div>' + ATTRS[HEROES[id].attr].icon + HEROES[id].name + '</div></div>').join('');
+  });
+  document.querySelectorAll('#pvp-screen .party-card').forEach(c => c.onclick = () => {
+    pvpSel[c.dataset.side] = c.dataset.id;
+    renderPvpSetup();
+  });
+  $('pvp-start').disabled = !(pvpSel[1] && pvpSel[2]);
+}
+
+function mkPvpFighter(id, side) {
+  const base = HEROES[id];
+  const attr = base.attr || '무';
+  return {
+    id, side, attr,
+    atk: Math.round(base.atk * ATTRS[attr].atk),
+    hp: Math.round(base.hp * (ATTRS[attr].hpMult || 1)),
+    maxHp: Math.round(base.hp * (ATTRS[attr].hpMult || 1)),
+    gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
+    hitCount: 0, stunNext: false, el: null,
+  };
+}
+
+function startPvp() {
+  mode = 'pvp';
+  P = { turn: 1, over: false, players: { 1: mkPvpFighter(pvpSel[1], 1), 2: mkPvpFighter(pvpSel[2], 2) } };
+  $('pvp-screen').classList.remove('on');
+  $('title-screen').style.display = 'none';
+  $('battle-screen').classList.add('on', 'stage-mode');
+  $('stage-result').classList.remove('on');
+  $('stage-units').innerHTML = '';
+  [1, 2].forEach(side => {
+    const f = P.players[side];
+    const h = HEROES[f.id];
+    const art = ART[heroKey(f.id)];
+    f.el = unitEl(
+      (art ? '<img class="body" src="' + art + '" style="height:110px">' : '<div class="body" style="font-size:64px">🧑</div>') +
+      '<div class="stun-mark">💫</div>' +
+      '<div class="name-tag">' + (side === 1 ? '1P ' : '2P ') + ATTRS[f.attr].icon + ' ' + h.name + '</div>' +
+      '<div class="hp-bar"><div class="hp-fill"></div></div>' +
+      '<div class="hp-num">' + f.hp + ' / ' + f.maxHp + '</div>',
+      side === 1 ? { left: '9%', bottom: '22%', zIndex: 5 } : { right: '9%', bottom: '22%', zIndex: 5 }
+    );
+    f.el.classList.add(side === 1 ? 'p1' : 'p2');
+  });
+  $('atk-btn').classList.add('on'); $('atk-btn').disabled = false;
+  $('ult-btn').classList.remove('on');
+  updatePvpTurnUI();
+}
+
+function setPvpHp(f) {
+  const pct = Math.max(0, f.hp / f.maxHp * 100);
+  const fill = f.el.querySelector('.hp-fill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('low', pct < 35);
+  f.el.querySelector('.hp-num').textContent = Math.max(0, Math.round(f.hp)) + ' / ' + f.maxHp;
+}
+
+function updatePvpTurnUI() {
+  const A = P.players[P.turn];
+  $('dungeon-name').textContent = (P.turn === 1 ? '🔵 1P' : '🔴 2P') + ' 차례! — ' + HEROES[A.id].name;
+  const hasGauge = HEROES[A.id].hasGauge;
+  $('gauge-wrap').classList.toggle('on', hasGauge);
+  $('gauge-wrap').classList.toggle('trans', Date.now() < A.buffUntil);
+  if (hasGauge) {
+    $('gauge-fill').style.width = A.gauge + '%';
+    $('gauge-pct').textContent = Math.floor(A.gauge) + '%';
+    document.querySelector('#gauge-label span').textContent = (P.turn === 1 ? '1P ' : '2P ') + (HEROES[A.id].skill || '⚡');
+    const ready = A.gauge >= 100 && Date.now() >= A.buffUntil;
+    $('gauge-wrap').classList.toggle('full', ready);
+    $('ult-btn').textContent = HEROES[A.id].skill || '⚡';
+    $('ult-btn').classList.toggle('on', ready);
+    $('ult-btn').disabled = !ready;
+  } else {
+    $('ult-btn').classList.remove('on');
+  }
+}
+
+// 속성 특성 + 상성을 전부 반영한 PvP 데미지 계산
+function pvpDamage(A, D, raw) {
+  let dmg = raw;
+  // 상성: 카운터 1.5배 / 역카운터 0.7배
+  if ((COUNTER[A.attr] || []).includes(D.attr)) { dmg *= 1.5; popDmg(A.el, '효과 굉장!', 'crit'); }
+  else if ((COUNTER[D.attr] || []).includes(A.attr)) dmg *= 0.7;
+  // 방어 특성: 수 1.3배 수비 / 암 0.7배 수비
+  dmg = dmg / ATTRS[D.attr].def;
+  // 무속성: 화·수 공격 0.7배로 / 빛속성: 암 공격 0.7배로
+  if (D.attr === '무' && (A.attr === '화' || A.attr === '수')) dmg *= 0.7;
+  if (D.attr === '빛' && A.attr === '암') dmg *= 0.7;
+  return Math.max(1, Math.round(dmg));
+}
+
+function pvpAttack() {
+  if (busy || !P || P.over) return;
+  busy = true; $('atk-btn').disabled = true;
+  const A = P.players[P.turn], D = P.players[P.turn === 1 ? 2 : 1];
+  A.el.classList.add(A.side === 1 ? 'lunge' : 'elunge');
+
+  setTimeout(() => {
+    A.el.classList.remove('lunge', 'elunge');
+    dropBolt(D.el);
+    setTimeout(() => {
+      const buffed = Date.now() < A.buffUntil ? A.buffMult : 1;
+      let raw = A.atk * (0.9 + Math.random() * 0.2) * buffed;
+      let fireProc = false;
+      if (ATTRS[A.attr].proc2x && Math.random() < ATTRS[A.attr].proc2x) {
+        raw *= 2; fireProc = true;
+        popDmg(A.el, '🔥 2배!!', 'ult');
+      }
+      const dmg = pvpDamage(A, D, raw);
+      D.hp -= dmg;
+      setPvpHp(D);
+      popDmg(D.el, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
+      D.el.classList.add('hurt');
+      $('arena').classList.add('shake');
+      setTimeout(() => { D.el.classList.remove('hurt'); $('arena').classList.remove('shake'); }, 300);
+      A.hitCount++;
+
+      // 조슨대왕 패시브: 2타마다 신하 추가타 (60%)
+      if (A.id === 'josun' && A.hitCount % 2 === 0 && D.hp > 0) {
+        spawnMinion(D.el);
+        setTimeout(() => {
+          if (D.hp <= 0 || P.over) return;
+          const md = pvpDamage(A, D, A.atk * 0.6);
+          D.hp -= md; setPvpHp(D);
+          popDmg(D.el, md, 'crit');
+          if (D.hp <= 0) pvpEnd(A);
+        }, 380);
+      }
+      // 백울프 패시브: 25% 스턴 → 상대 다음 턴 건너뜀
+      if (A.id === 'wolf' && D.hp > 0 && Math.random() < 0.25) {
+        D.stunNext = true;
+        D.el.classList.add('stunned');
+      }
+      // 게이지 충전
+      if (HEROES[A.id].hasGauge && Date.now() >= A.buffUntil) A.gauge = Math.min(100, A.gauge + 22);
+
+      setTimeout(() => {
+        if (P.over) return;
+        if (D.hp <= 0) return pvpEnd(A);
+        // 턴 넘기기 (스턴이면 상대 턴 건너뛰고 다시 내 턴)
+        if (D.stunNext) {
+          D.stunNext = false;
+          D.el.classList.remove('stunned');
+          popDmg(D.el, '💫 기절! 턴 건너뜀', 'tickle');
+        } else {
+          P.turn = P.turn === 1 ? 2 : 1;
+        }
+        updatePvpTurnUI();
+        busy = false; $('atk-btn').disabled = false;
+      }, 650);
+    }, 300);
+  }, 150);
+}
+
+function pvpSkill() {
+  if (busy || !P || P.over) return;
+  const A = P.players[P.turn];
+  if (!HEROES[A.id].hasGauge || A.gauge < 100 || Date.now() < A.buffUntil) return;
+  A.gauge = 0;
+  $('flash').classList.add('on');
+  spawnUltBurst();
+  setTimeout(() => $('flash').classList.remove('on'), 700);
+  if (A.id === 'draebeo') {
+    A.buffMult = 1.6; A.buffUntil = Date.now() + 60000; A.transformed = true;
+    if (ART.legend2) A.el.querySelector('img.body').src = ART.legend2;
+  } else if (A.id === 'priest') {
+    A.buffMult = 2; A.buffUntil = Date.now() + 10000;
+  }
+  updatePvpTurnUI();
+}
+
+// 변신 지속 종료 처리 (1초 틱)
+setInterval(() => {
+  if (mode !== 'pvp' || !P || P.over) return;
+  [1, 2].forEach(side => {
+    const f = P.players[side];
+    if (f.transformed && Date.now() >= f.buffUntil) {
+      f.transformed = false; f.buffMult = 1;
+      if (ART.legend) f.el.querySelector('img.body').src = ART.legend;
+    }
+  });
+  updatePvpTurnUI();
+}, 1000);
+
+function pvpEnd(winner) {
+  P.over = true;
+  $('result-chest').style.display = 'none';
+  $('result-title').textContent = (winner.side === 1 ? '🔵 1P' : '🔴 2P') + ' 승리!! 🏆';
+  $('result-rewards').textContent = HEROES[winner.id].name + '의 승리! 친선전이라 보상은 우정입니다.';
+  $('result-actions').innerHTML =
+    '<button class="result-action" id="pvp-rematch">다시 대결</button>' +
+    '<button class="result-action" id="pvp-exit">나가기</button>';
+  $('pvp-rematch').onclick = () => { $('stage-result').classList.remove('on'); startPvp(); };
+  $('pvp-exit').onclick = exitPvp;
+  $('stage-result').classList.add('on');
+}
+function exitPvp() {
+  mode = 'menu';
+  busy = false; P = null;
+  $('stage-result').classList.remove('on');
+  $('battle-screen').classList.remove('on', 'stage-mode');
+  $('stage-units').innerHTML = '';
+  $('atk-btn').classList.remove('on');
+  $('ult-btn').classList.remove('on');
+  $('gauge-wrap').classList.remove('on', 'full', 'trans');
+  $('title-screen').style.display = '';
+  renderPvpSetup();
+  $('pvp-screen').classList.add('on');
+}
+
+$('pvp-open').onclick = () => { renderPvpSetup(); $('pvp-screen').classList.add('on'); };
+$('pvp-start').onclick = () => { if (pvpSel[1] && pvpSel[2]) startPvp(); };
 
 // ── 진입점: 플레이 버튼 → 스테이지 선택 ──
 $('start-btn').onclick = () => {
