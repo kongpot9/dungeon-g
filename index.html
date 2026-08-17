@@ -1109,9 +1109,9 @@ const HEROES = {
 const MONSTERS = {
   slime:    { name: '슬라임', hp: 60, atk: 8, size: 78, attr: '수' },              // 속성: 예준 확정
   bat:      { name: '박쥐', hp: 45, atk: 10, size: 70, attr: '암' },               // 제1지역은 초보 구간 → 공격력 흡수 없음 (예준 기획) · 속성: 예준 확정
-  mushroom: { name: '독버섯', hp: 70, atk: 7, size: 76, poison: 3 },               // 속성: 예준 배정 대기
+  mushroom: { name: '독버섯', hp: 70, atk: 7, size: 76, poison: 3, attr: '암' },   // 속성: 예준 확정
   tree:     { name: '화가 난 나무', hp: 140, atk: 12, size: 104, attr: '암' },     // 속성: 예준 확정
-  king:     { name: '슬라임킹', hp: 900, atk: 20, size: 150, boss: true },         // 속성: 예준 배정 대기 (수속성일 것 같지만!)
+  king:     { name: '슬라임킹', hp: 900, atk: 20, size: 150, boss: true, attr: '수' }, // 속성: 예준 확정 (역시 수속성!)
 };
 const ENEMY_POS = [
   { right: '8%', bottom: '20%' }, { right: '21%', bottom: '33%' }, { right: '32%', bottom: '17%' },
