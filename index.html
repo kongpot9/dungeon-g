@@ -111,6 +111,28 @@
   .s-fighter .stun-mark { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 22px; display: none; }
   .s-fighter.stunned .stun-mark { display: block; animation: pulse 0.8s infinite; }
   .s-fighter.stunned img.body { filter: grayscale(.7) brightness(.8); }
+  /* ── 물소소녀 (예준 기획): 물꽃 평타 · 박치기 · 비 ── */
+  .waterflower { position: absolute; z-index: 16; font-size: 54px; pointer-events: none; animation: flowerFall .55s ease-in forwards; filter: drop-shadow(0 0 12px rgba(120,200,255,.9)); }
+  @keyframes flowerFall {
+    0% { opacity: 0; transform: translateY(-120px) rotate(-40deg) scale(.5); }
+    35% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(10px) rotate(20deg) scale(1.2); }
+  }
+  .s-fighter.charge { animation: chargeFx .55s ease-in-out; }
+  @keyframes chargeFx { 0%,100% { transform: none; } 30% { transform: translateX(90px) scale(1.12); } 60% { transform: translateX(70px); } }
+  .s-fighter.blown { animation: blownFx .5s ease-out; }
+  @keyframes blownFx { 0% { transform: none; } 40% { transform: translateX(60px) rotate(18deg); } 100% { transform: none; } }
+  #rain-layer { position: absolute; inset: 0; z-index: 12; display: none; pointer-events: none; overflow: hidden; }
+  #rain-layer.on { display: block; }
+  #rain-layer::before {
+    content: ''; position: absolute; inset: -20% 0 0 0;
+    background-image: repeating-linear-gradient(105deg, rgba(150,215,255,.55) 0 2px, transparent 2px 13px);
+    animation: rainFall .5s linear infinite;
+  }
+  @keyframes rainFall { to { transform: translateY(60px); } }
+  #rain-badge { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); z-index: 30; display: none; padding: 3px 12px; border-radius: 10px; background: rgba(20,40,70,.85); border: 2px solid #6fd9ff; color: #9fdcff; font-size: 12px; font-weight: 800; }
+  #rain-badge.on { display: block; }
+
   .minion-pop { position: absolute; z-index: 18; pointer-events: none; animation: minionFx .7s ease-out forwards; filter: sepia(.6) drop-shadow(0 0 10px rgba(255,217,74,.8)); }
   @keyframes minionFx { 0% { opacity: 0; transform: translateY(20px) scale(.4);} 30% { opacity: 1; transform: translateY(0) scale(1);} 100% { opacity: 0; transform: translateY(-30px) scale(.9);} }
 
@@ -486,6 +508,8 @@
       </div>
 
       <div id="ult-bolt">🐉</div>
+      <div id="rain-layer"></div>
+      <div id="rain-badge">🌧️ 비! 상대 공격력 25%↓</div>
       <div id="stage-units"></div>
     </div>
     <button id="flee-btn">🏃 도망</button>
@@ -534,7 +558,7 @@
       <div id="gacha-result"><div id="result-card"></div></div>
       <div id="gacha-msg"></div>
     </div>
-    <div id="rate-info">확률 공개: 조슨대왕 35% · 백울프 35% · 첫사랑성직자 27% · 드래베오 3%</div>
+    <div id="rate-info">확률 공개: 조슨대왕 35% · 백울프 35% · 첫사랑성직자 13.5% · 물소소녀 13.5% · 드래베오 3%</div>
     <button id="pull-btn">뽑기! (🎟️ 1장)</button>
   </div>
 
@@ -652,6 +676,7 @@ loadArt('priest', 'character/priest');   // 첫사랑성직자 (뽑기·도감)
 // 아군 (뽑기 풀)
 loadArt('josun', 'character/josun');       // 조슨대왕 — 신하 소환 어태커
 loadArt('wolf', 'character/wolf');         // 백울프 — 확률 스턴
+loadArt('watergirl', 'character/watergirl'); // 물소소녀 — 물꽃·박치기·비
 // 도구 8종 (예준 그림)
 ['boots','contract','darkblade','yellowcard','invitation','dagger','balloon','shovel']
   .forEach(id => loadArt('item_' + id, 'character/item_' + id));
@@ -1015,8 +1040,10 @@ const CHARS = [
     story: '즈은하시티에 나타난 조선의 대왕. 신하들이 대체 어디서 소환되는지는 국가 기밀이라 아무도 모른다.' },
   { id: 'wolf',    name: '백울프',      rank: '희귀', stars: '★★★',    rate: 35, desc: '25% 확률로 상대에게 스턴',
     story: '백호 가면을 쓴 늑대 전사. 너무 조용히 다가와서 적이 깜짝 놀라 기절한다. 그게 스턴이다.' },
-  { id: 'priest',  name: '첫사랑성직자', rank: '영웅', stars: '★★★★',  rate: 27, desc: '주술: 아군 공격력 2배 (10초)',
+  { id: 'priest',  name: '첫사랑성직자', rank: '영웅', stars: '★★★★',  rate: 13.5, desc: '주술: 아군 공격력 2배 (10초)',
     story: '첫사랑을 아직도 못 잊어서 매일 밤 촛불에 소원을 빈다. 주술의 정체는 사실... 간절한 응원의 힘이다.' },
+  { id: 'watergirl', name: '물소소녀',  rank: '영웅', stars: '★★★★',  rate: 13.5, desc: '물꽃 평타 · 20% 박치기로 적 전체 쓸어버림 · 비가 오면 적 공격력 25%↓',
+    story: '물소의 뿔을 가진 소녀. 위에서 물꽃을 떨어뜨리다가, 가끔 참지 못하고 그냥 박치기를 한다.' },
   { id: 'draebeo', name: '드래베오',    rank: '전설', stars: '★★★★★', rate: 3,  desc: '변신: 정룡술사 (평타 1.6배)',
     story: '용을 다루는 대학생입니다. 원래는 대학 개그동아리 소속인데 하필 맡은 대사가 전부 간지나는 것들뿐이라... 가끔씩 현타로 인해 반쯤 미친다고 합니다.' }, // 스토리: 구예준
 ];
@@ -1037,9 +1064,10 @@ $('pull-btn').onclick = () => {
   saveData.tickets--; saveData.pulls++;
   persist(); refreshTickets();
 
-  const r = Math.random() * 100;
-  // 전설 3% → 영웅 27% → 희귀 35%+35%
-  const pick = r < 3 ? CHARS[3] : r < 30 ? CHARS[2] : r < 65 ? CHARS[1] : CHARS[0];
+  // 확률 뽑기: CHARS의 rate(%)를 누적해서 고름 — 캐릭터를 어디에 추가해도 안전
+  const r = Math.random() * CHARS.reduce((s, c) => s + c.rate, 0);
+  let acc = 0;
+  const pick = CHARS.find(c => (acc += c.rate) > r) || CHARS[0];
 
   $('gacha-result').classList.remove('on');
   $('gacha-stage').classList.remove('showing-result');
@@ -1217,6 +1245,8 @@ const COUNTER = { 수: ['화'], 화: ['암'], 암: ['무', '빛'], 무: ['수'],
 const HEROES = {
   draebeo: { name: '드래베오', atk: 120, hp: 300, skill: '🐉 변신', hasGauge: true, attr: '화' },
   priest:  { name: '첫사랑성직자', atk: 70, hp: 260, skill: '🔮 주술', hasGauge: true, attr: '암' },  // 속성: 예준 확정
+  // 물소소녀 (예준 기획): 평타=위에서 내려오는 물꽃 · 20% 박치기로 적 전체 쓸어버림 · 물꽃이 비를 부르면 적 공격력 25%↓ 10초
+  watergirl: { name: '물소소녀', atk: 88, hp: 290, skill: null, hasGauge: false, attr: '수' },
   josun:   { name: '조슨대왕', atk: 85, hp: 280, skill: null, hasGauge: false, attr: '빛' }, // 패시브: 2타마다 신하 소환 · 속성: 예준 확정
   wolf:    { name: '백울프', atk: 90, hp: 270, skill: null, hasGauge: false, attr: '무' },   // 패시브: 25% 스턴 · 속성: 예준 확정
 };
@@ -1339,7 +1369,7 @@ function startStage(n) {
   const hMul = heroItem === 'shovel' ? 1 : (ATTRS[attr].hpMult || 1);
   S = {
     n, seg: 0, segTotal: segCount(n), heroId: saveData.party, lv, attr,
-    item: heroItem, used: {},
+    item: heroItem, used: {}, rainUntil: 0,
     // 속성 보정: 공격력 (수 0.8배, 암 1.4배) · 체력 (빛 1.2배)
     atk: Math.round(base.atk * statMult * aMul),
     hp: Math.round(base.hp * statMult * hMul),
@@ -1440,11 +1470,14 @@ function stageAttack() {
   const target = S.enemies.find(e => e.hp > 0);
   if (!target) return;
   busy = true; $('atk-btn').disabled = true;
-  S.heroEl.classList.add('lunge');
+  // 물소소녀: 20% 박치기 (적 전체 쓸어버림) / 평소엔 물꽃이 위에서 내려옴 — 예준 기획
+  const isWater = S.heroId === 'watergirl';
+  const headbutt = isWater && Math.random() < 0.2;
+  S.heroEl.classList.add(headbutt ? 'charge' : 'lunge');
 
   setTimeout(() => {
-    S.heroEl.classList.remove('lunge');
-    dropBolt(target.el);
+    S.heroEl.classList.remove('lunge', 'charge');
+    if (isWater) dropWaterFlower(target.el); else dropBolt(target.el);
     setTimeout(() => {
       // 버프 (주술/변신) + 도구 배수 적용
       const buffed = Date.now() < S.buffUntil ? S.buffMult : 1;
@@ -1463,7 +1496,23 @@ function stageAttack() {
         else if ((COUNTER[tAttr] || []).includes(S.attr)) { dmg = Math.round(dmg * 0.7); }
       }
       S.hitCount++;
-      hitEnemy(target, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
+      if (headbutt) {
+        // 🐃 박치기: 살아있는 적 전원을 쓸어버림 (각 70%)
+        popDmg(S.heroEl, '🐃 박치기!!', 'ult');
+        S.enemies.filter(e => e.hp > 0).forEach((e, i) => {
+          e.el.classList.add('blown');
+          setTimeout(() => e.el.classList.remove('blown'), 500);
+          setTimeout(() => hitEnemy(e, Math.round(dmg * 0.7), 'crit'), i * 90);
+        });
+      } else {
+        hitEnemy(target, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
+        // 🌧️ 물꽃이 비를 부름 (25%): 10초간 적 공격력 25%↓
+        if (isWater && Math.random() < 0.25) {
+          S.rainUntil = Date.now() + 10000;
+          showRain(true);
+          popDmg(S.heroEl, '🌧️ 비!', 'tickle');
+        }
+      }
       // 🗡️ 요술단검: 딱 1번 2연타
       if (S.item === 'dagger' && !S.used.dagger) {
         S.used.dagger = true;
@@ -1517,6 +1566,22 @@ function hitEnemy(u, dmg, cls) {
   if (u.hp <= 0) u.el.classList.add('dead');
 }
 
+// ── 물소소녀 전용 연출 (예준 기획) ──
+function dropWaterFlower(targetEl) {
+  const f = document.createElement('div');
+  f.className = 'waterflower';
+  f.textContent = '💠';
+  const box = targetEl.getBoundingClientRect(), arena = $('arena').getBoundingClientRect();
+  f.style.left = (box.left - arena.left + box.width / 2 - 27) + 'px';
+  f.style.top = (box.top - arena.top - 10) + 'px';
+  $('arena').appendChild(f);
+  setTimeout(() => f.remove(), 600);
+}
+function showRain(on) {
+  $('rain-layer').classList.toggle('on', on);
+  $('rain-badge').classList.toggle('on', on);
+}
+
 function spawnMinion(targetEl) {
   const m = document.createElement(ART.josun ? 'img' : 'div');
   m.className = 'minion-pop';
@@ -1542,6 +1607,8 @@ function enemyCounters() {
       e.el.classList.add('elunge');
       setTimeout(() => e.el.classList.remove('elunge'), 250);
       let dmg = e.atk * (0.9 + Math.random() * 0.2);
+      // 🌧️ 비 (물소소녀): 적 공격력 25%↓
+      if (S.rainUntil && Date.now() < S.rainUntil) dmg *= 0.75;
       const mAttr = MONSTERS[e.type].attr;
       if (!shovelIn(S, null)) { // 🥄 삽이면 속성 계산 전부 생략
         // 속성 방어 보정: 수 1.3배 수비 / 암 0.7배 수비
@@ -1621,6 +1688,8 @@ function stageSkill() {
 // 스테이지용 초당 틱: 게이지 자동충전 + 버프 종료 처리
 setInterval(() => {
   if (mode !== 'stage' || !S || S.over) return;
+  // 🌧️ 비 종료 처리
+  if (S.rainUntil && Date.now() >= S.rainUntil) { S.rainUntil = 0; showRain(false); }
   if (HEROES[S.heroId].hasGauge) {
     if (Date.now() < S.buffUntil) {
       // 버프 중: 남은 시간 게이지로 표시
@@ -1704,6 +1773,7 @@ function exitStage() {
   $('atk-btn').classList.remove('on');
   $('ult-btn').classList.remove('on');
   $('gauge-wrap').classList.remove('on', 'full', 'trans');
+  showRain(false);
   $('title-screen').style.display = '';
   renderStages();
   $('stage-screen').classList.add('on');
@@ -1843,14 +1913,20 @@ function pvpAttack() {
   if (busy || !P || P.over) return;
   busy = true; $('atk-btn').disabled = true;
   const A = P.players[P.turn], D = P.players[P.turn === 1 ? 2 : 1];
-  A.el.classList.add(A.side === 1 ? 'lunge' : 'elunge');
+  // 물소소녀: 20% 박치기 / 평소엔 물꽃 (예준 기획). 1대1은 1:1이라 박치기는 강타로
+  const isWater = A.id === 'watergirl';
+  const headbutt = isWater && Math.random() < 0.2;
+  A.el.classList.add(headbutt ? 'charge' : (A.side === 1 ? 'lunge' : 'elunge'));
 
   setTimeout(() => {
-    A.el.classList.remove('lunge', 'elunge');
-    dropBolt(D.el);
+    A.el.classList.remove('lunge', 'elunge', 'charge');
+    if (isWater) dropWaterFlower(D.el); else dropBolt(D.el);
     setTimeout(() => {
       const buffed = Date.now() < A.buffUntil ? A.buffMult : 1;
       let raw = A.atk * (0.9 + Math.random() * 0.2) * buffed * itemAtkMult(A);
+      // 🌧️ 비 맞는 중이면 내 공격력 25%↓ / 🐃 박치기는 강타
+      if (A.atkDownUntil && Date.now() < A.atkDownUntil) raw *= 0.75;
+      if (headbutt) { raw *= 1.4; popDmg(A.el, '🐃 박치기!!', 'ult'); }
       let fireProc = false;
       if (!shovelIn(A, D) && ATTRS[A.attr].proc2x && Math.random() < ATTRS[A.attr].proc2x) {
         raw *= 2; fireProc = true;
@@ -1909,6 +1985,12 @@ function pvpAttack() {
         D.stunNext = true;
         D.el.classList.add('stunned');
       }
+      // 물소소녀 패시브: 물꽃이 비를 부름 (25%) → 상대 공격력 25%↓ 10초
+      if (isWater && !headbutt && D.hp > 0 && Math.random() < 0.25) {
+        D.atkDownUntil = Date.now() + 10000;
+        showRain(true);
+        popDmg(A.el, '🌧️ 비!', 'tickle');
+      }
       // 게이지 충전
       if (HEROES[A.id].hasGauge && Date.now() >= A.buffUntil) A.gauge = Math.min(100, A.gauge + 22);
 
@@ -1950,6 +2032,9 @@ function pvpSkill() {
 // 변신 지속 종료 처리 (1초 틱)
 setInterval(() => {
   if (mode !== 'pvp' || !P || P.over) return;
+  // 🌧️ 비 종료 (둘 다 안 맞고 있으면 끄기)
+  const raining = [1, 2].some(s => P.players[s].atkDownUntil && Date.now() < P.players[s].atkDownUntil);
+  showRain(raining);
   [1, 2].forEach(side => {
     const f = P.players[side];
     if (f.transformed && Date.now() >= f.buffUntil) {
@@ -1981,6 +2066,7 @@ function exitPvp() {
   $('atk-btn').classList.remove('on');
   $('ult-btn').classList.remove('on');
   $('gauge-wrap').classList.remove('on', 'full', 'trans');
+  showRain(false);
   $('title-screen').style.display = '';
   renderPvpSetup();
   $('pvp-screen').classList.add('on');
