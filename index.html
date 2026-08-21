@@ -76,6 +76,32 @@
   .pick-row .party-card.sel { border-color: #ffd94a; }
   #pvp-start:disabled { filter: grayscale(1) brightness(.6); }
 
+  /* ── 🎬 영화관 (예준 기획) ── */
+  #movie-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 6px; }
+  #popcorn-box { display: flex; align-items: center; gap: 14px; padding: 10px 18px; background: linear-gradient(180deg,#2a2240,#1a142e); border: 3px solid #ffd94a; border-radius: 16px; box-shadow: 0 0 18px rgba(255,217,74,.25); }
+  #popcorn-icon { font-size: 46px; }
+  #popcorn-icon img { max-height: 60px; max-width: 60px; }
+  #popcorn-name { font-size: 17px; font-weight: 900; color: #ffe9a0; }
+  #popcorn-reward { font-size: 11px; color: #9c92c4; margin: 3px 0 5px; line-height: 1.5; }
+  #watch-btn { padding: 13px 34px; font-size: 19px; font-weight: 900; color: #2b1c05; background: linear-gradient(180deg,#ffe9a0,#f0a93a); border: none; border-radius: 14px; box-shadow: 0 5px 0 #8a5a14; cursor: pointer; }
+  #watch-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #8a5a14; }
+  #watch-btn:disabled { filter: grayscale(1) brightness(.6); }
+  #movie-msg { font-size: 12px; color: #ffd94a; min-height: 16px; }
+  #card-info { font-size: 12px; color: #9c92c4; }
+  #sp-pull-btn { padding: 15px 22px; font-size: 16px; font-weight: 900; color: #fff; background: linear-gradient(180deg,#b06aff,#6a2fd6); border: none; border-radius: 14px; box-shadow: 0 5px 0 #3d1a80; cursor: pointer; }
+  #sp-pull-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #3d1a80; }
+
+  /* 영화 상영 연출 */
+  #cinema { position: absolute; inset: 0; z-index: 96; display: none; align-items: center; justify-content: center; background: #05030b; }
+  #cinema.on { display: flex; }
+  #cinema-inner { position: relative; text-align: center; width: 100%; }
+  #screen-glow { width: 74%; max-width: 420px; height: 96px; margin: 0 auto 8px; border-radius: 8px; background: linear-gradient(180deg,#fff,#9fdcff); box-shadow: 0 0 60px rgba(160,220,255,.75); animation: flick 1.1s ease-in-out infinite alternate; }
+  @keyframes flick { from { opacity: .55; } to { opacity: 1; } }
+  #cinema-seats { font-size: 34px; letter-spacing: 6px; filter: brightness(.35); }
+  #cinema-text { color: #cfeaa0; font-weight: 800; margin-top: 6px; }
+  #cinema-reward { color: #ffe9a0; font-weight: 900; font-size: 15px; line-height: 1.6; margin-top: 4px; }
+  @media (max-height: 430px) { #screen-glow { height: 64px; } #cinema-seats { font-size: 26px; } #popcorn-icon { font-size: 34px; } }
+
   /* ── 자동사냥 컨트롤 (예준 기획) ── */
   #auto-controls { display: none; flex-direction: column; gap: 6px; }
   #auto-controls.on { display: flex; }
@@ -463,6 +489,7 @@
       <button class="menu-btn" id="gacha-open">🎰 뽑기</button>
       <button class="menu-btn" id="dex-open">📖 캐릭터</button>
       <button class="menu-btn" id="pvp-open">⚔️ 대결</button>
+      <button class="menu-btn" id="movie-open">🎬 영화관</button>
     </div>
     <div class="ticket-chip ticket-view"></div>
     <div id="title-studio">구예준 스튜디오</div>
@@ -557,7 +584,10 @@
     <div class="sub-head">
       <button class="back-btn">← 뒤로</button>
       <div class="sub-title">🎰 뽑기</div>
-      <div class="ticket-chip ticket-view"></div>
+      <div style="display:flex;gap:6px">
+        <div class="ticket-chip ticket-view"></div>
+        <div class="ticket-chip sp-view">🎫 0</div>
+      </div>
     </div>
     <div id="gacha-stage">
       <div id="pickup-banner">
@@ -572,8 +602,47 @@
       <div id="gacha-result"><div id="result-card"></div></div>
       <div id="gacha-msg"></div>
     </div>
-    <div id="rate-info">확률 공개: 조슨대왕 35% · 백울프 35% · 첫사랑성직자 13.5% · 물소소녀 13.5% · 드래베오 3%</div>
-    <button id="pull-btn">뽑기! (🎟️ 1장)</button>
+    <div id="rate-info">확률 공개 — 일반: 조슨대왕 35% · 백울프 35% · 첫사랑성직자 13.5% · 물소소녀 13.5% · 드래베오 3%<br>🎫 스페셜: 영웅 80% · 전설 20% (희귀 안 나옴)</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="pull-btn">뽑기! (🎟️ 1장)</button>
+      <button id="sp-pull-btn">🎫 스페셜 뽑기</button>
+    </div>
+  </div>
+
+  <!-- 🎬 영화관 (예준 기획) -->
+  <div id="movie-screen" class="sub-screen">
+    <div class="sub-head">
+      <button class="back-btn">← 뒤로</button>
+      <div class="sub-title">🎬 즈은하시티 영화관</div>
+      <div style="display:flex;gap:6px">
+        <div class="ticket-chip candy-view">⭐ 0</div>
+        <div class="ticket-chip sp-view">🎫 0</div>
+      </div>
+    </div>
+    <div id="movie-body">
+      <div id="popcorn-box">
+        <div id="popcorn-icon">🍿</div>
+        <div>
+          <div id="popcorn-name">기본 팝콘</div>
+          <div id="popcorn-reward"></div>
+          <button class="lvl-btn" id="popcorn-up">업그레이드</button>
+        </div>
+      </div>
+      <button id="watch-btn">🎬 영화 보기 (⭐10)</button>
+      <div id="movie-msg"></div>
+      <div id="card-info"></div>
+    </div>
+  </div>
+
+  <!-- 영화 상영 연출 -->
+  <div id="cinema">
+    <div id="cinema-inner">
+      <div id="screen-glow"></div>
+      <div id="cinema-seats"></div>
+      <div id="cinema-text">🎬 영화 상영 중...</div>
+      <div id="cinema-reward"></div>
+      <button class="result-action" id="cinema-ok" style="display:none">확인</button>
+    </div>
   </div>
 
   <!-- 스테이지 선택 -->
@@ -692,6 +761,8 @@ loadArt('priest', 'character/priest');   // 첫사랑성직자 (뽑기·도감)
 loadArt('josun', 'character/josun');       // 조슨대왕 — 신하 소환 어태커
 loadArt('wolf', 'character/wolf');         // 백울프 — 확률 스턴
 loadArt('watergirl', 'character/watergirl'); // 물소소녀 — 물꽃·박치기·비
+// 🍿 팝콘 그림 (그리면 자동 교체, 없으면 이모지)
+[1, 2, 3, 4, 5].forEach(i => loadArt('popcorn' + i, 'character/popcorn' + i));
 // 도구 8종 (예준 그림)
 ['boots','contract','darkblade','yellowcard','invitation','dagger','balloon','shovel']
   .forEach(id => loadArt('item_' + id, 'character/item_' + id));
@@ -1081,7 +1152,12 @@ $('pull-btn').onclick = () => {
   const r = Math.random() * CHARS.reduce((s, c) => s + c.rate, 0);
   let acc = 0;
   const pick = CHARS.find(c => (acc += c.rate) > r) || CHARS[0];
+  doPullResult(pick, false);
+};
 
+// 뽑기 연출 + 결과 처리 (일반 뽑기 · 🎫스페셜 뽑기 공용)
+function doPullResult(pick, isSpecial) {
+  pulling = true;
   $('gacha-result').classList.remove('on');
   $('gacha-stage').classList.remove('showing-result');
   $('gacha-msg').textContent = '';
@@ -1117,9 +1193,10 @@ $('pull-btn').onclick = () => {
     $('gacha-result').classList.add('on');
     $('gacha-stage').classList.add('showing-result');
     if (legendary) $('gacha-msg').textContent = '"...다시 만났군." — 드래베오';
+    else if (isSpecial) $('gacha-msg').textContent = '🎫 스페셜 뽑기 — 영웅 이상 확정!';
     pulling = false;
   }, legendary ? 2800 : 1400);
-};
+}
 
 function levelCost(lv) { return lv * 5; } // 별사탕 레벨업 비용 (Lv.1→2 = 5개, Lv.2→3 = 10개...)
 function renderDex() {
@@ -1175,9 +1252,21 @@ function openCharDetail(id) {
         '<button class="lvl-btn" id="cd-equip-btn">바꾸기</button>' +
       '</div>' +
       (lv < 15
-        ? '<button class="lvl-btn" style="font-size:14px;padding:9px 18px" id="cd-lvlup">⭐' + levelCost(lv) + ' 레벨업</button>'
+        ? '<button class="lvl-btn" style="font-size:14px;padding:9px 18px" id="cd-lvlup">⭐' + levelCost(lv) + ' 레벨업</button>' +
+          ((saveData.lvCards || 0) > 0
+            ? ' <button class="lvl-btn" style="font-size:14px;padding:9px 14px" id="cd-cardup">📜 카드 사용 (' + saveData.lvCards + ')</button>'
+            : '')
         : '');
     $('cd-equip-btn').onclick = () => openItemPicker(id);
+    // 📜 레벨업 카드 사용 (영화관 보상)
+    const cardBtn = $('cd-cardup');
+    if (cardBtn) cardBtn.onclick = () => {
+      if ((saveData.lvCards || 0) <= 0) return;
+      saveData.lvCards--;
+      saveData.lv[id] = lv + 1;
+      persist(); renderDex();
+      openCharDetail(id);
+    };
     const btn = $('cd-lvlup');
     if (btn) btn.onclick = () => {
       const cost = levelCost(lv);
@@ -1229,6 +1318,96 @@ $('ip-close').onclick = () => $('item-picker').classList.remove('on');
 $('cd-close').onclick = () => $('char-detail').classList.remove('on');
 $('char-detail').onclick = e => { if (e.target.id === 'char-detail') $('char-detail').classList.remove('on'); };
 
+// ═══════════ 🎬 영화관 (기획: 구예준) ═══════════
+// 던전 → ⭐별사탕 → 🍿팝콘 업그레이드 → 영화 관람 → 📜레벨업카드 / 🎒도구 / 🎫티켓
+const WATCH_COST = 10;            // 관람비 (던전 1~2판이면 충분)
+const POPCORN = [
+  { name: '기본 팝콘',   icon: '🍿', up: 30,   cards: [1, 1], item: 0.08, ticket: 0 },
+  { name: '카라멜 팝콘', icon: '🍯', up: 60,   cards: [1, 2], item: 0.15, ticket: 0.05 },
+  { name: '치즈 팝콘',   icon: '🧀', up: 110,  cards: [2, 2], item: 0.22, ticket: 0.12 },
+  { name: '초코 팝콘',   icon: '🍫', up: 180,  cards: [2, 3], item: 0.30, ticket: 0.20 },
+  { name: '황금 팝콘',   icon: '👑', up: null, cards: [3, 4], item: 0.40, ticket: 0.32 },
+];
+function popLv() { return Math.min(POPCORN.length, Math.max(1, saveData.popLv || 1)); }
+function popNow() { return POPCORN[popLv() - 1]; }
+function popArt(i) { return ART['popcorn' + (i + 1)] ? '<img src="' + ART['popcorn' + (i + 1)] + '" alt="">' : POPCORN[i].icon; }
+function refreshSp() { document.querySelectorAll('.sp-view').forEach(el => el.textContent = '🎫 ' + (saveData.spTickets || 0)); }
+
+function renderMovie() {
+  const i = popLv() - 1, p = POPCORN[i];
+  $('popcorn-icon').innerHTML = popArt(i);
+  $('popcorn-name').textContent = 'Lv.' + (i + 1) + ' ' + p.name;
+  $('popcorn-reward').innerHTML =
+    '📜 레벨업 카드 ' + (p.cards[0] === p.cards[1] ? p.cards[0] : p.cards[0] + '~' + p.cards[1]) + '장' +
+    ' · 🎒 도구 ' + Math.round(p.item * 100) + '%' +
+    ' · 🎫 티켓 ' + Math.round(p.ticket * 100) + '%';
+  const upBtn = $('popcorn-up');
+  if (p.up === null) { upBtn.textContent = '👑 최고 등급!'; upBtn.disabled = true; }
+  else { upBtn.textContent = '⭐' + p.up + ' 업그레이드 → ' + POPCORN[i + 1].name; upBtn.disabled = false; }
+  $('watch-btn').textContent = '🎬 영화 보기 (⭐' + WATCH_COST + ')';
+  $('card-info').textContent = '📜 보유한 레벨업 카드: ' + (saveData.lvCards || 0) + '장 (캐릭터 화면에서 사용)';
+  refreshCandy(); refreshSp();
+}
+$('popcorn-up').onclick = () => {
+  const p = popNow();
+  if (p.up === null) return;
+  if ((saveData.candy || 0) < p.up) { $('movie-msg').textContent = '⭐ 별사탕이 부족해! (' + (saveData.candy || 0) + '/' + p.up + ') — 던전에서 모아와!'; return; }
+  saveData.candy -= p.up;
+  saveData.popLv = popLv() + 1;
+  persist();
+  $('movie-msg').textContent = '🍿 팝콘이 ' + popNow().name + '(으)로 업그레이드됐다!';
+  renderMovie();
+};
+$('watch-btn').onclick = () => {
+  if ((saveData.candy || 0) < WATCH_COST) { $('movie-msg').textContent = '⭐ 별사탕이 부족해! 던전 한 판만 돌고 오자'; return; }
+  saveData.candy -= WATCH_COST;
+  const p = popNow();
+  // 보상 굴리기
+  const cards = p.cards[0] + Math.floor(Math.random() * (p.cards[1] - p.cards[0] + 1));
+  saveData.lvCards = (saveData.lvCards || 0) + cards;
+  let lines = ['📜 레벨업 카드 +' + cards];
+  const unowned = Object.keys(ITEMS).filter(i => !saveData.items[i]);
+  if (Math.random() < p.item && unowned.length) {
+    const drop = unowned[Math.floor(Math.random() * unowned.length)];
+    saveData.items[drop] = true;
+    lines.push('🎒 도구 획득: ' + ITEMS[drop].name + '!');
+  }
+  if (Math.random() < p.ticket) {
+    saveData.spTickets = (saveData.spTickets || 0) + 1;
+    lines.push('🎫 스페셜 티켓 +1');
+  }
+  persist();
+  // 상영 연출
+  const deck = myDeck();
+  $('cinema-seats').innerHTML = (deck.length ? deck : ['wolf']).map(id =>
+    ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" style="height:52px;filter:brightness(.3)">' : '🧑').join(' ');
+  $('cinema-text').textContent = '🎬 ' + p.name + '을(를) 먹으며 영화 감상 중...';
+  $('cinema-reward').innerHTML = '';
+  $('cinema-ok').style.display = 'none';
+  $('cinema').classList.add('on');
+  setTimeout(() => {
+    $('cinema-text').textContent = '🎉 재밌게 봤다!';
+    $('cinema-reward').innerHTML = lines.join('<br>');
+    $('cinema-ok').style.display = '';
+    renderMovie();
+  }, 2200);
+};
+$('cinema-ok').onclick = () => { $('cinema').classList.remove('on'); $('movie-msg').textContent = ''; };
+$('movie-open').onclick = () => { renderMovie(); $('movie-msg').textContent = ''; $('movie-screen').classList.add('on'); };
+
+// 🎫 스페셜 뽑기: 영웅 이상 확정
+$('sp-pull-btn').onclick = () => {
+  if (pulling) return;
+  if ((saveData.spTickets || 0) <= 0) { $('gacha-msg').textContent = '🎫 스페셜 티켓이 없어! 영화관에서 얻을 수 있어'; return; }
+  pulling = true;
+  saveData.spTickets--; refreshSp();
+  const pool = CHARS.filter(c => c.rank === '영웅' || c.rank === '전설');
+  const legendaries = pool.filter(c => c.rank === '전설');
+  const heroes = pool.filter(c => c.rank === '영웅');
+  const pick = (Math.random() < 0.2 && legendaries.length) ? legendaries[Math.floor(Math.random() * legendaries.length)]
+                                                          : heroes[Math.floor(Math.random() * heroes.length)];
+  doPullResult(pick, true);
+};
 $('gacha-open').onclick = () => {
   $('gacha-result').classList.remove('on');
   $('gacha-stage').classList.remove('showing-result');
@@ -1237,7 +1416,7 @@ $('gacha-open').onclick = () => {
   refreshTickets();
   $('gacha-screen').classList.add('on');
 };
-$('dex-open').onclick = () => { renderDex(); refreshTickets(); $('dex-screen').classList.add('on'); };
+$('dex-open').onclick = () => { renderDex(); refreshTickets(); refreshSp(); $('dex-screen').classList.add('on'); };
 document.querySelectorAll('.back-btn').forEach(b => b.onclick = () => b.closest('.sub-screen').classList.remove('on'));
 refreshTickets();
 
