@@ -75,6 +75,16 @@
   .pick-row[data-side="2"] .side-label { color: #ff9a9a; }
   .pick-row .party-card.sel { border-color: #ffd94a; }
   #pvp-start:disabled { filter: grayscale(1) brightness(.6); }
+
+  /* ── 자동사냥 컨트롤 (예준 기획) ── */
+  #auto-controls { display: none; flex-direction: column; gap: 6px; }
+  #auto-controls.on { display: flex; }
+  .auto-btn { padding: 9px 12px; font-size: 14px; font-weight: 900; color: #e8e2ff; background: #241d3d; border: 2px solid #5a4d8a; border-radius: 10px; cursor: pointer; }
+  .auto-btn:active { transform: translateY(2px); }
+  /* 덱 순번 배지 */
+  .party-card { position: relative; }
+  .deck-no { position: absolute; top: -6px; left: -6px; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(180deg,#ffe9a0,#f0a93a); color: #2b1c05; font-size: 11px; font-weight: 900; line-height: 18px; }
+  #party-row { flex-wrap: wrap; justify-content: center; }
   #pvp-picks { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
   #pvp-screen .party-card { width: 62px; padding: 4px; font-size: 10px; }
   #pvp-screen .party-card img { max-width: 40px; max-height: 38px; }
@@ -532,6 +542,10 @@
         <div id="gauge-label"><span>⚡ 특수스킬</span><span id="gauge-pct">0%</span></div>
         <div id="gauge-bar"><div id="gauge-fill"></div></div>
       </div>
+      <div id="auto-controls">
+        <button class="auto-btn" id="pause-btn">⏸ 일시정지</button>
+        <button class="auto-btn" id="speed-btn">⏩ x1</button>
+      </div>
       <button class="battle-btn" id="atk-btn">⚔️ 공격</button>
       <button class="battle-btn" id="ult-btn">🐉 변신</button>
     </div>
@@ -585,7 +599,8 @@
       <div class="ticket-chip">친선전</div>
     </div>
     <div id="pvp-picks">
-      <div style="color:#9c9c4;font-size:12px;color:#9c92c4">폰 하나로 친구랑! 캐릭터 + 🎒도구(세팅)를 고르세요</div>
+      <div style="font-size:12px;color:#9c92c4">폰 하나로 친구랑! 3마리 덱을 짜서 자동 전투 (⭐전설은 1마리만)</div>
+      <div id="pvp-msg" style="font-size:12px;color:#ffd94a;min-height:16px"></div>
       <div id="pvp-pick1" class="pick-row"></div>
       <div id="pvp-item1" class="pick-row item-row"></div>
       <div style="color:#8f86b5;font-weight:900">VS</div>
@@ -897,8 +912,7 @@ function dropBolt(targetEl) {
 
 // ── 공격 ──
 $('atk-btn').onclick = () => {
-  if (mode === 'stage') return stageAttack();
-  if (mode === 'pvp') return pvpAttack();
+  if (mode !== 'tutorial') return;  // 던전·대결은 자동사냥이라 수동 공격 없음
   if (busy) return;
   busy = true; $('atk-btn').disabled = true;
   $('legend').classList.add('lunge');
@@ -979,8 +993,7 @@ $('atk-btn').onclick = () => {
 // ── 필살기 ──
 // 🐉 변신 버튼 (예준 기획: 필살기 = 정룡술사 변신)
 $('ult-btn').onclick = () => {
-  if (mode === 'stage') return stageSkill();
-  if (mode === 'pvp') return pvpSkill();
+  if (mode !== 'tutorial') return;  // 던전·대결은 스킬도 자동 발동
   if (busy) return;
   busy = true; $('ult-btn').disabled = true; $('ult-btn').classList.remove('on');
 
@@ -1310,22 +1323,55 @@ const heroKey = id => id === 'draebeo' ? 'legend' : id;
 function ownedHeroes() { return Object.keys(HEROES).filter(id => saveData.coll[id]); }
 function refreshCandy() { document.querySelectorAll('.candy-view').forEach(el => el.textContent = '⭐ ' + (saveData.candy || 0)); }
 
+// ══════ 덱 (예준 기획: 3마리 덱 · 전설은 1마리만) ══════
+const DECK_MAX = 3;
+function isLegendId(id) { const c = CHARS.find(x => x.id === id); return !!c && c.rank === '전설'; }
+function normDeck(list) {
+  const out = [];
+  (list || []).forEach(id => {
+    if (!saveData.coll[id] || out.includes(id) || out.length >= DECK_MAX) return;
+    if (isLegendId(id) && out.some(isLegendId)) return; // 전설 1마리 제한
+    out.push(id);
+  });
+  return out;
+}
+function myDeck() {
+  let d = normDeck(saveData.deck);
+  if (!d.length) d = normDeck(ownedHeroes());
+  saveData.deck = d; persist();
+  return d;
+}
+function deckToggle(deck, id) {
+  if (deck.includes(id)) return { deck: deck.filter(x => x !== id), msg: '' };
+  if (deck.length >= DECK_MAX) return { deck, msg: '덱은 3명까지야!' };
+  if (isLegendId(id) && deck.some(isLegendId)) return { deck, msg: '⭐ 전설은 1마리만 넣을 수 있어!' };
+  return { deck: deck.concat(id), msg: '' };
+}
+function renderDeckRow(el, deck, onToggle, label) {
+  const owned = ownedHeroes();
+  el.innerHTML = (label ? '<div class="side-label">' + label + '</div>' : '') +
+    (owned.length ? owned.map(id => {
+      const n = deck.indexOf(id);
+      const it = (saveData.equip || {})[id];
+      return '<div class="party-card' + (n >= 0 ? ' sel' : '') + '" data-id="' + id + '">' +
+        (n >= 0 ? '<div class="deck-no">' + (n + 1) + '</div>' : '') +
+        (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
+        '<div>' + ATTRS[HEROES[id].attr || '무'].icon + HEROES[id].name + (isLegendId(id) ? '⭐' : '') + '</div>' +
+        '<div style="color:#7cf76a;font-size:10px">Lv.' + ((saveData.lv || {})[id] || 1) + (it ? ' 🎒' : '') + '</div></div>';
+    }).join('') : '<div style="color:#9c92c4;font-size:12px;align-self:center">캐릭터가 없어! 🎰 뽑기 먼저!</div>');
+  el.querySelectorAll('.party-card').forEach(c => c.onclick = () => onToggle(c.dataset.id));
+}
+
 // ── 스테이지 선택 화면 ──
 function renderStages() {
   const cleared = saveData.cleared || [];
-  const owned = ownedHeroes();
-  if (!owned.includes(saveData.party)) saveData.party = owned[0] || null;
-
-  $('party-row').innerHTML = owned.length
-    ? '<div style="color:#9c92c4;font-size:12px;align-self:center">출전:</div>' + owned.map(id =>
-        '<div class="party-card' + (saveData.party === id ? ' sel' : '') + '" data-id="' + id + '">' +
-        (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
-        '<div>' + ATTRS[HEROES[id].attr || '무'].icon + ' ' + HEROES[id].name + '</div>' +
-        '<div style="color:#7cf76a;font-size:10px">Lv.' + ((saveData.lv || {})[id] || 1) + '</div></div>').join('')
-    : '<div style="color:#9c92c4;font-size:13px;align-self:center">아직 캐릭터가 없어! 🎰 뽑기에서 캐릭터를 뽑아와!</div>';
-  document.querySelectorAll('.party-card').forEach(c => c.onclick = () => {
-    saveData.party = c.dataset.id; persist(); renderStages();
-  });
+  const deck = myDeck();
+  renderDeckRow($('party-row'), deck, id => {
+    const r = deckToggle(myDeck(), id);
+    saveData.deck = r.deck; persist();
+    $('stage-msg').textContent = r.msg;
+    renderStages();
+  }, '덱(3):');
 
   const tutDone = cleared.includes('tut');
   let html = '<button class="stage-btn" data-stage="tut">튜토리얼' + (tutDone ? ' ⭐' : '') + '</button>';
@@ -1336,11 +1382,10 @@ function renderStages() {
       (unlocked ? '1-' + i + (done ? ' ⭐' : '') + (i === 10 ? ' 👑' : '') : '🔒') + '</button>';
   }
   $('stage-grid').innerHTML = html;
-  // #stage-grid 안의 버튼만! (pvp-start도 .stage-btn 스타일을 쓰므로 전역 선택 금지)
   document.querySelectorAll('#stage-grid .stage-btn').forEach(b => b.onclick = () => {
     if (b.classList.contains('locked')) { $('stage-msg').textContent = '이전 스테이지를 먼저 깨야 해!'; return; }
     if (b.dataset.stage === 'tut') return startTutorial();
-    if (!saveData.party) { $('stage-msg').textContent = '캐릭터가 없어! 🎰 뽑기 먼저!'; return; }
+    if (!myDeck().length) { $('stage-msg').textContent = '덱이 비었어! 🎰 뽑기 먼저!'; return; }
     startStage(parseInt(b.dataset.stage));
   });
   refreshCandy(); refreshTickets();
@@ -1352,221 +1397,56 @@ function startTutorial() {
   location.reload();
 }
 
-// ── 스테이지 전투 ──
+// ═══════════ 자동사냥 전투 엔진 (예준 기획: 3v3 덱 · 자동전투) ═══════════
+// 던전과 1대1이 같은 엔진을 씀. 유닛은 각자 쿨타임마다 자동 공격하고 스킬도 자동 발동.
+const ATK_CD = 1700;                    // 기본 공격 간격(ms)
+const SLOT_A = [{ left: '4%', bottom: '44%' }, { left: '15%', bottom: '27%' }, { left: '26%', bottom: '10%' }];
+const SLOT_B = [{ right: '4%', bottom: '44%' }, { right: '15%', bottom: '27%' }, { right: '26%', bottom: '10%' }];
+const opp = s => (s === 'A' ? 'B' : 'A');
+let B = null, battleTimer = null;
+
 function segCount(n) { return n === 10 ? 3 : n <= 3 ? 3 : n <= 6 ? 4 : 5; }
 function stagePool(n) { return n <= 3 ? ['slime'] : n <= 6 ? ['slime', 'bat'] : ['slime', 'bat', 'mushroom', 'tree']; }
 
-function startStage(n) {
-  mode = 'stage';
-  const base = HEROES[saveData.party];
-  // 레벨 보정: 레벨당 공격력·체력 +8% (만렙 15 = 약 2.1배)
-  const lv = (saveData.lv || {})[saveData.party] || 1;
-  const statMult = 1 + 0.08 * (lv - 1);
+function mkHero(id, side) {
+  const base = HEROES[id];
+  const lv = (saveData.lv || {})[id] || 1;
+  const statMult = 1 + 0.08 * (lv - 1);           // 레벨당 +8%
   const attr = base.attr || '무';
-  const heroItem = (saveData.equip || {})[saveData.party] || null;
-  // 🥄 삽 = 무상성 완전체 (예준 확정): 속성 스탯 배수까지 전부 1배
-  const aMul = heroItem === 'shovel' ? 1 : ATTRS[attr].atk;
-  const hMul = heroItem === 'shovel' ? 1 : (ATTRS[attr].hpMult || 1);
-  S = {
-    n, seg: 0, segTotal: segCount(n), heroId: saveData.party, lv, attr,
-    item: heroItem, used: {}, rainUntil: 0,
-    // 속성 보정: 공격력 (수 0.8배, 암 1.4배) · 체력 (빛 1.2배)
-    atk: Math.round(base.atk * statMult * aMul),
-    hp: Math.round(base.hp * statMult * hMul),
-    maxHp: Math.round(base.hp * statMult * hMul),
+  const item = (saveData.equip || {})[id] || null;
+  const aMul = item === 'shovel' ? 1 : ATTRS[attr].atk;   // 🥄 삽 = 무상성 완전체
+  const hMul = item === 'shovel' ? 1 : (ATTRS[attr].hpMult || 1);
+  const maxHp = Math.round(base.hp * statMult * hMul);
+  return {
+    kind: 'hero', id, side, lv, attr, item, used: {}, name: base.name,
+    art: ART[heroKey(id)] || null, hasGauge: !!base.hasGauge, skill: base.skill,
+    atk: Math.round(base.atk * statMult * aMul), hp: maxHp, maxHp,
     gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
-    hitCount: 0, over: false,
+    hitCount: 0, stunned: false, nextAt: 0, el: null,
   };
-  $('stage-screen').classList.remove('on');
-  $('title-screen').style.display = 'none';
-  const bs = $('battle-screen');
-  bs.classList.add('on', 'stage-mode');
-  $('stage-result').classList.remove('on');
-  $('atk-btn').classList.add('on'); $('atk-btn').disabled = false;
-  $('ult-btn').classList.remove('on');
-  const hasGauge = HEROES[S.heroId].hasGauge;
-  $('gauge-wrap').classList.toggle('on', hasGauge);
-  $('gauge-wrap').classList.remove('full', 'trans');
-  document.querySelector('#gauge-label span').textContent = HEROES[S.heroId].skill || '⚡';
-  if (HEROES[S.heroId].skill) $('ult-btn').textContent = HEROES[S.heroId].skill;
-  spawnHero();
-  nextSegment();
+}
+function mkMon(type, side, hpScale, atkScale) {
+  const m = MONSTERS[type];
+  const maxHp = Math.round(m.hp * (m.boss ? 1 : hpScale));
+  return {
+    kind: 'mon', id: type, type, side, attr: m.attr || '무', item: null, used: {},
+    name: m.name, art: ART[type] || null, size: Math.round(m.size * 0.72), boss: !!m.boss,
+    atk: Math.round(m.atk * (m.boss ? 1 : atkScale)), poison: m.poison || 0,
+    hp: maxHp, maxHp, gauge: 0, buffMult: 1, buffUntil: 0,
+    hitCount: 0, stunned: false, nextAt: 0, el: null,
+  };
 }
 
-function unitEl(html, style) {
-  const d = document.createElement('div');
-  d.className = 's-fighter';
-  d.innerHTML = html;
-  Object.assign(d.style, style);
-  $('stage-units').appendChild(d);
-  return d;
+function mkBattle(kind) {
+  return {
+    kind, over: false, paused: false, speed: 1,
+    teams: { A: [], B: [] },
+    teamBuff: { A: { mult: 1, until: 0 }, B: { mult: 1, until: 0 } },  // 🔮 주술
+    rainOn: { A: 0, B: 0 },                                            // 🌧️ 비 맞는 팀
+  };
 }
 
-function spawnHero() {
-  $('stage-units').innerHTML = '';
-  const h = HEROES[S.heroId];
-  const art = ART[heroKey(S.heroId)];
-  S.heroEl = unitEl(
-    (art ? '<img class="body" src="' + art + '" style="height:110px">' : '<div class="body" style="font-size:64px">🧑</div>') +
-    '<div class="stun-mark">💫</div>' +
-    '<div class="name-tag">' + ATTRS[S.attr].icon + ' ' + h.name + ' Lv.' + S.lv + '</div>' +
-    '<div class="hp-bar"><div class="hp-fill"></div></div>' +
-    '<div class="hp-num">' + S.hp + ' / ' + S.maxHp + '</div>',
-    { left: '9%', bottom: '22%', zIndex: 5 }
-  );
-}
-
-function nextSegment() {
-  S.seg++;
-  S.enemies = [];
-  document.querySelectorAll('#stage-units .enemy').forEach(e => e.remove());
-  const isBossSeg = S.n === 10 && S.seg === S.segTotal;
-  let types;
-  if (isBossSeg) types = ['king'];
-  else {
-    const pool = stagePool(S.n);
-    const cnt = Math.min(3, 2 + (Math.random() < 0.4 ? 1 : 0));
-    types = Array.from({ length: cnt }, () => pool[Math.floor(Math.random() * pool.length)]);
-  }
-  const hpScale = 1 + (S.n - 1) * 0.12, atkScale = 1 + (S.n - 1) * 0.05;
-  types.forEach((t, i) => {
-    const m = MONSTERS[t];
-    const hp = Math.round(m.hp * (m.boss ? 1 : hpScale));
-    const el = unitEl(
-      (ART[t] ? '<img class="body" src="' + ART[t] + '" style="height:' + m.size + 'px">' : '<div class="body" style="font-size:50px">👾</div>') +
-      '<div class="stun-mark">💫</div>' +
-      '<div class="name-tag">' + (m.attr ? ATTRS[m.attr].icon + ' ' : '') + m.name + '</div>' +
-      '<div class="hp-bar"><div class="hp-fill"></div></div>' +
-      '<div class="hp-num">' + hp + ' / ' + hp + '</div>',
-      m.boss ? { right: '12%', bottom: '18%', zIndex: 4 } : { ...ENEMY_POS[i], zIndex: 4 }
-    );
-    el.classList.add('enemy');
-    el.style.opacity = 0; el.style.transform = 'translateX(60px)';
-    setTimeout(() => { el.style.transition = 'all .45s ease-out'; el.style.opacity = 1; el.style.transform = 'none'; }, 80 + i * 150);
-    S.enemies.push({ type: t, hp, maxHp: hp, atk: Math.round(m.atk * (m.boss ? 1 : atkScale)), poison: m.poison || 0, stunned: false, el });
-  });
-  $('dungeon-name').textContent = S.n === 10 && isBossSeg
-    ? '1-10 즈은하시티 · 👑 보스전!'
-    : '1-' + S.n + ' 즈은하시티 · 길 ' + S.seg + '/' + S.segTotal;
-}
-
-function setUnitHp(u) {
-  const pct = Math.max(0, u.hp / u.maxHp * 100);
-  const f = u.el.querySelector('.hp-fill');
-  f.style.width = pct + '%';
-  f.classList.toggle('low', pct < 35);
-  u.el.querySelector('.hp-num').textContent = Math.max(0, Math.round(u.hp)) + ' / ' + u.maxHp;
-}
-function setHeroHp() {
-  const pct = Math.max(0, S.hp / S.maxHp * 100);
-  const f = S.heroEl.querySelector('.hp-fill');
-  f.style.width = pct + '%';
-  f.classList.toggle('low', pct < 35);
-  S.heroEl.querySelector('.hp-num').textContent = Math.max(0, Math.round(S.hp)) + ' / ' + S.maxHp;
-}
-
-function stageAttack() {
-  if (busy || !S || S.over) return;
-  const target = S.enemies.find(e => e.hp > 0);
-  if (!target) return;
-  busy = true; $('atk-btn').disabled = true;
-  // 물소소녀: 20% 박치기 (적 전체 쓸어버림) / 평소엔 물꽃이 위에서 내려옴 — 예준 기획
-  const isWater = S.heroId === 'watergirl';
-  const headbutt = isWater && Math.random() < 0.2;
-  S.heroEl.classList.add(headbutt ? 'charge' : 'lunge');
-
-  setTimeout(() => {
-    S.heroEl.classList.remove('lunge', 'charge');
-    if (isWater) dropWaterFlower(target.el); else dropBolt(target.el);
-    setTimeout(() => {
-      // 버프 (주술/변신) + 도구 배수 적용
-      const buffed = Date.now() < S.buffUntil ? S.buffMult : 1;
-      const noAttr = shovelIn(S, null); // 🥄 삽: 속성 개념 무시
-      let dmg = Math.round(S.atk * (0.9 + Math.random() * 0.2) * buffed * itemAtkMult(S));
-      // 화속성 특성: 5% 확률로 데미지 2배 (예준 기획)
-      let fireProc = false;
-      if (!noAttr && ATTRS[S.attr].proc2x && Math.random() < ATTRS[S.attr].proc2x) {
-        dmg *= 2; fireProc = true;
-        popDmg(S.heroEl, '🔥 2배!!', 'ult');
-      }
-      // 포켓몬식 상성: 카운터 1.5배 / 역카운터 0.7배 (몬스터에 속성이 있을 때만)
-      const tAttr = MONSTERS[target.type].attr;
-      if (tAttr && !noAttr) {
-        if ((COUNTER[S.attr] || []).includes(tAttr)) { dmg = Math.round(dmg * 1.5); popDmg(S.heroEl, '효과 굉장!', 'crit'); }
-        else if ((COUNTER[tAttr] || []).includes(S.attr)) { dmg = Math.round(dmg * 0.7); }
-      }
-      S.hitCount++;
-      if (headbutt) {
-        // 🐃 박치기: 살아있는 적 전원을 쓸어버림 (각 70%)
-        popDmg(S.heroEl, '🐃 박치기!!', 'ult');
-        S.enemies.filter(e => e.hp > 0).forEach((e, i) => {
-          e.el.classList.add('blown');
-          setTimeout(() => e.el.classList.remove('blown'), 500);
-          setTimeout(() => hitEnemy(e, Math.round(dmg * 0.7), 'crit'), i * 90);
-        });
-      } else {
-        hitEnemy(target, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
-        // 🌧️ 물꽃이 비를 부름 (25%): 10초간 적 공격력 25%↓
-        if (isWater && Math.random() < 0.25) {
-          S.rainUntil = Date.now() + 10000;
-          showRain(true);
-          popDmg(S.heroEl, '🌧️ 비!', 'tickle');
-        }
-      }
-      // 🗡️ 요술단검: 딱 1번 2연타
-      if (S.item === 'dagger' && !S.used.dagger) {
-        S.used.dagger = true;
-        setTimeout(() => {
-          if (S.over || target.hp <= 0) return;
-          dropBolt(target.el);
-          popDmg(S.heroEl, '🗡️ 2연타!', 'tickle');
-          hitEnemy(target, dmg, 'crit');
-        }, 330);
-      }
-
-      // 조슨대왕 패시브: 2타마다 신하 소환 (예준 기획)
-      if (S.heroId === 'josun' && S.hitCount % 2 === 0) {
-        const t2 = S.enemies.find(e => e.hp > 0) || target;
-        spawnMinion(t2.el);
-        setTimeout(() => { if (t2.hp > 0) hitEnemy(t2, Math.round(S.atk * 0.6), 'crit'); }, 350);
-      }
-      // 백울프 패시브: 25% 확률 스턴 (예준 기획)
-      if (S.heroId === 'wolf' && target.hp > 0 && Math.random() < 0.25) {
-        target.stunned = true;
-        target.el.classList.add('stunned');
-      }
-      // 게이지 충전 (변신/주술 캐릭터만)
-      if (HEROES[S.heroId].hasGauge && Date.now() >= S.buffUntil) {
-        S.gauge = Math.min(100, S.gauge + 22);
-        updateStageGauge();
-      }
-
-      setTimeout(() => {
-        if (S.over) return;
-        if (S.enemies.every(e => e.hp <= 0)) {
-          // 세그먼트 클리어
-          if (S.seg >= S.segTotal) return stageWin();
-          busy = false; $('atk-btn').disabled = false;
-          setTimeout(nextSegment, 550);
-        } else {
-          enemyCounters();
-        }
-      }, 500);
-    }, 300);
-  }, 150);
-}
-
-function hitEnemy(u, dmg, cls) {
-  u.hp -= dmg;
-  setUnitHp(u);
-  popDmg(u.el, dmg, cls);
-  u.el.classList.add('hurt');
-  $('arena').classList.add('shake');
-  setTimeout(() => { u.el.classList.remove('hurt'); $('arena').classList.remove('shake'); }, 300);
-  if (u.hp <= 0) u.el.classList.add('dead');
-}
-
-// ── 물소소녀 전용 연출 (예준 기획) ──
+// ── 연출 헬퍼 (물소소녀 물꽃 · 비 · 조슨대왕 신하) ──
 function dropWaterFlower(targetEl) {
   const f = document.createElement('div');
   f.className = 'waterflower';
@@ -1581,499 +1461,418 @@ function showRain(on) {
   $('rain-layer').classList.toggle('on', on);
   $('rain-badge').classList.toggle('on', on);
 }
-
 function spawnMinion(targetEl) {
   const m = document.createElement(ART.josun ? 'img' : 'div');
   m.className = 'minion-pop';
-  if (ART.josun) { m.src = ART.josun; m.style.height = '60px'; } else m.textContent = '🤴';
+  if (ART.josun) { m.src = ART.josun; m.style.height = '52px'; } else m.textContent = '🤴';
   const box = targetEl.getBoundingClientRect(), arena = $('arena').getBoundingClientRect();
-  m.style.left = (box.left - arena.left - 50) + 'px';
-  m.style.top = (box.top - arena.top + 20) + 'px';
+  m.style.left = (box.left - arena.left - 46) + 'px';
+  m.style.top = (box.top - arena.top + 18) + 'px';
   $('arena').appendChild(m);
   setTimeout(() => m.remove(), 750);
 }
 
-function enemyCounters() {
-  const alive = S.enemies.filter(e => e.hp > 0);
-  let delay = 0;
-  alive.forEach(e => {
-    setTimeout(() => {
-      if (S.over) return;
-      if (e.stunned) { // 스턴: 이번 반격 건너뜀
-        e.stunned = false;
-        e.el.classList.remove('stunned');
-        return;
-      }
-      e.el.classList.add('elunge');
-      setTimeout(() => e.el.classList.remove('elunge'), 250);
-      let dmg = e.atk * (0.9 + Math.random() * 0.2);
-      // 🌧️ 비 (물소소녀): 적 공격력 25%↓
-      if (S.rainUntil && Date.now() < S.rainUntil) dmg *= 0.75;
-      const mAttr = MONSTERS[e.type].attr;
-      if (!shovelIn(S, null)) { // 🥄 삽이면 속성 계산 전부 생략
-        // 속성 방어 보정: 수 1.3배 수비 / 암 0.7배 수비
-        dmg = dmg / ATTRS[S.attr].def;
-        // 무속성 특성: 화·수속성의 공격을 0.7배로 받음 / 빛속성: 암속성 공격 0.7배로 받음
-        if (mAttr) {
-          if (S.attr === '무' && (mAttr === '화' || mAttr === '수')) dmg *= 0.7;
-          if (S.attr === '빛' && mAttr === '암') dmg *= 0.7;
-          // 몬스터 쪽 상성도 적용
-          if ((COUNTER[mAttr] || []).includes(S.attr)) dmg *= 1.5;
-          else if ((COUNTER[S.attr] || []).includes(mAttr)) dmg *= 0.7;
-        }
-      }
-      dmg = Math.round(dmg);
-      // 🎒 방어 도구 처리 (침묵·풍선 무효 / 옐로카드·흑도 배수 / 부츠 반사)
-      const dd = itemDefend(S, mAttr || '무', dmg);
-      if (dd.negateMsg) {
-        popDmg(S.heroEl, dd.negateMsg, 'tickle');
-      } else {
-        dmg = dd.dmg;
-        S.hp -= dmg;
-        popDmg(S.heroEl, dmg, 'heropain');
-        if (dd.reflectRatio) {
-          const r = Math.max(1, Math.round(dmg * dd.reflectRatio));
-          e.hp -= r; setUnitHp(e);
-          popDmg(e.el, '🥾 반사 ' + r, 'crit');
-          if (e.hp <= 0) {
-            e.el.classList.add('dead');
-            if (S.enemies.every(x => x.hp <= 0)) {
-              if (S.seg >= S.segTotal) setTimeout(stageWin, 500);
-              else setTimeout(nextSegment, 700);
-            }
-          }
-        }
-        if (e.poison) { S.hp -= e.poison; popDmg(S.heroEl, '☠️' + e.poison, 'tickle'); }
-      }
-      setHeroHp();
-      S.heroEl.classList.add('hurt');
-      setTimeout(() => S.heroEl.classList.remove('hurt'), 300);
-      if (S.hp <= 0) stageLose();
-    }, delay);
-    delay += 320;
-  });
-  setTimeout(() => {
-    if (S.over) return;
-    busy = false; $('atk-btn').disabled = false;
-  }, delay + 350);
+function setUnitBar(u) {
+  if (!u.el) return;
+  const pct = Math.max(0, u.hp / u.maxHp * 100);
+  const f = u.el.querySelector('.hp-fill');
+  f.style.width = pct + '%';
+  f.classList.toggle('low', pct < 35);
 }
-
-function updateStageGauge() {
-  $('gauge-fill').style.width = S.gauge + '%';
-  $('gauge-pct').textContent = Math.floor(S.gauge) + '%';
-  const full = S.gauge >= 100 && Date.now() >= S.buffUntil;
-  $('gauge-wrap').classList.toggle('full', full);
-  if (full) { $('ult-btn').classList.add('on'); $('ult-btn').disabled = false; }
+function unitTag(u) {
+  return ATTRS[u.attr].icon + ' ' + u.name +
+    (u.kind === 'hero' ? ' <span style="color:#7cf76a">Lv.' + u.lv + '</span>' : '');
 }
-
-function stageSkill() {
-  if (!S || S.over || S.gauge < 100) return;
-  S.gauge = 0;
-  $('ult-btn').classList.remove('on');
-  $('flash').classList.add('on');
-  spawnUltBurst();
-  setTimeout(() => $('flash').classList.remove('on'), 700);
-  if (S.heroId === 'draebeo') {
-    S.buffMult = 1.6; S.buffUntil = Date.now() + 60000; S.transformed = true;
-    if (ART.legend2) S.heroEl.querySelector('img.body').src = ART.legend2;
-    S.heroEl.querySelector('.name-tag').textContent = '정룡술사 드래베오';
-    $('gauge-wrap').classList.add('trans');
-  } else if (S.heroId === 'priest') {
-    S.buffMult = 2; S.buffUntil = Date.now() + 10000; // 주술: 10초간 공격력 2배 (예준 기획)
-    $('gauge-wrap').classList.add('trans');
-  }
-  updateStageGauge();
-}
-
-// 스테이지용 초당 틱: 게이지 자동충전 + 버프 종료 처리
-setInterval(() => {
-  if (mode !== 'stage' || !S || S.over) return;
-  // 🌧️ 비 종료 처리
-  if (S.rainUntil && Date.now() >= S.rainUntil) { S.rainUntil = 0; showRain(false); }
-  if (HEROES[S.heroId].hasGauge) {
-    if (Date.now() < S.buffUntil) {
-      // 버프 중: 남은 시간 게이지로 표시
-      const total = S.heroId === 'draebeo' ? 60000 : 10000;
-      S.gauge = Math.max(0, (S.buffUntil - Date.now()) / total * 100);
-      updateStageGauge();
-    } else {
-      if (S.transformed) { // 변신 종료 → 원래 모습
-        S.transformed = false; S.buffMult = 1;
-        if (ART.legend) S.heroEl.querySelector('img.body').src = ART.legend;
-        S.heroEl.querySelector('.name-tag').textContent = HEROES[S.heroId].name;
-        $('gauge-wrap').classList.remove('trans');
-      } else if (S.buffMult > 1) {
-        S.buffMult = 1;
-        $('gauge-wrap').classList.remove('trans');
-      }
-      S.gauge = Math.min(100, S.gauge + 3);
-      updateStageGauge();
-    }
-  }
-}, 1000);
-
-// ── 승리 / 패배 / 도망 ──
-function stageWin() {
-  S.over = true;
-  const first = !(saveData.cleared || []).includes(String(S.n));
-  const candy = 4 + S.n, tickets = first ? 3 : 1;
-  saveData.candy = (saveData.candy || 0) + candy;
-  saveData.tickets += tickets;
-  // 스토리 첫 클리어 = 출전 캐릭터 레벨 +1 (예준 기획: 스토리를 깨야 레벨이 오른다)
-  let lvHtml = '';
-  if (first) {
-    saveData.cleared = [...(saveData.cleared || []), String(S.n)];
-    saveData.lv = saveData.lv || {};
-    const curLv = saveData.lv[S.heroId] || 1;
-    if (curLv < 15) {
-      saveData.lv[S.heroId] = curLv + 1;
-      lvHtml = '<br>📈 <b style="color:#7cf76a">' + HEROES[S.heroId].name + ' 레벨 업! Lv.' + (curLv + 1) + '</b>';
-    }
-  }
-  // 🎒 도구 드랍 (예준 기획: 도구는 던전 드랍) — 30%, 보스(1-10)는 확정. 다 모았으면 별사탕 +3
-  let dropHtml = '';
-  const unowned = Object.keys(ITEMS).filter(i => !saveData.items[i]);
-  if (S.n === 10 || Math.random() < 0.3) {
-    if (unowned.length) {
-      const drop = unowned[Math.floor(Math.random() * unowned.length)];
-      saveData.items[drop] = true;
-      dropHtml = '<br><div style="margin-top:6px">🎁 <b style="color:#ffd94a">도구 획득: ' + ITEMS[drop].name + '!</b><br>' +
-        '<span style="font-size:12px;color:#9c92c4">' + ITEMS[drop].desc + '</span></div>';
-    } else {
-      saveData.candy += 3;
-      dropHtml = '<br>🎒 도구를 다 모아서 ⭐ 별사탕 +3 추가!';
-    }
-  }
-  persist();
-  if (ART.chest) { $('result-chest').src = ART.chest; $('result-chest').style.display = 'block'; }
-  $('result-title').textContent = '🎉 1-' + S.n + ' 클리어!';
-  $('result-rewards').innerHTML = '⭐ 별사탕 +' + candy + '<br>🎟️ 뽑기권 +' + tickets + (first ? ' (첫 클리어!)' : '') + lvHtml + dropHtml;
-  $('result-actions').innerHTML = '<button class="result-action" id="result-ok">확인</button>';
-  $('result-ok').onclick = exitStage;
-  $('stage-result').classList.add('on');
-}
-function stageLose() {
-  S.over = true;
-  $('result-chest').style.display = 'none';
-  $('result-title').textContent = '💀 패배...';
-  $('result-rewards').textContent = '즈은하시티는 만만하지 않다!';
-  $('result-actions').innerHTML =
-    '<button class="result-action" id="result-retry">다시 도전</button>' +
-    '<button class="result-action" id="result-exit">나가기</button>';
-  $('result-retry').onclick = () => startStage(S.n);
-  $('result-exit').onclick = exitStage;
-  $('stage-result').classList.add('on');
-}
-function exitStage() {
-  mode = 'menu';
-  busy = false; S = null;
-  $('stage-result').classList.remove('on');
-  $('battle-screen').classList.remove('on', 'stage-mode');
+function renderField() {
   $('stage-units').innerHTML = '';
-  $('atk-btn').classList.remove('on');
-  $('ult-btn').classList.remove('on');
-  $('gauge-wrap').classList.remove('on', 'full', 'trans');
-  showRain(false);
-  $('title-screen').style.display = '';
-  renderStages();
-  $('stage-screen').classList.add('on');
-}
-$('flee-btn').onclick = () => {
-  if (mode === 'stage') exitStage();
-  else if (mode === 'pvp') exitPvp();
-};
-
-// ═══════════ 1대1 대결 v1 — 폰 하나로 친구랑 턴제 배틀 (기획: 구예준) ═══════════
-// 친선전: 모든 캐릭터 기본 스탯 (세팅 시스템은 예준이 설계 중 — 나오면 여기 연결)
-
-let P = null;
-const pvpSel = { 1: null, 2: null };
-const pvpItemSel = { 1: null, 2: null };
-
-function renderPvpSetup() {
-  [1, 2].forEach(side => {
-    $('pvp-pick' + side).innerHTML =
-      '<div class="side-label">' + (side === 1 ? '🔵 1P' : '🔴 2P') + '</div>' +
-      Object.keys(HEROES).map(id =>
-        '<div class="party-card' + (pvpSel[side] === id ? ' sel' : '') + '" data-side="' + side + '" data-id="' + id + '">' +
-        (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
-        '<div>' + ATTRS[HEROES[id].attr].icon + HEROES[id].name + '</div></div>').join('');
-    // 🎒 도구 선택 줄 (세팅! — 던전에서 드랍한 도구만 사용 가능)
-    const ownedItems = Object.keys(ITEMS).filter(i => saveData.items[i]);
-    $('pvp-item' + side).innerHTML =
-      '<div class="side-label">🎒</div>' +
-      '<div class="ip-mini' + (!pvpItemSel[side] ? ' sel' : '') + '" data-side="' + side + '" data-item="">🚫</div>' +
-      (ownedItems.length
-        ? ownedItems.map(iid =>
-            '<div class="ip-mini' + (pvpItemSel[side] === iid ? ' sel' : '') + '" data-side="' + side + '" data-item="' + iid + '" title="' + ITEMS[iid].name + ': ' + ITEMS[iid].desc + '">' + itemArt(iid) + '</div>').join('')
-        : '<div style="font-size:11px;color:#9c92c4">도구 없음 — 던전에서 드랍!</div>') +
-      '<div style="font-size:11px;color:#ffd94a">' + (pvpItemSel[side] ? ITEMS[pvpItemSel[side]].name : '') + '</div>';
+  ['A', 'B'].forEach(side => {
+    B.teams[side].forEach((u, i) => {
+      const slot = (side === 'A' ? SLOT_A : SLOT_B)[i] || {};
+      const h = u.kind === 'hero' ? 76 : (u.size || 58);
+      const el = document.createElement('div');
+      el.className = 's-fighter ' + (side === 'A' ? 'p1' : 'p2');
+      el.innerHTML =
+        (u.art ? '<img class="body" src="' + u.art + '" style="height:' + h + 'px">'
+               : '<div class="body" style="font-size:44px">' + (u.kind === 'hero' ? '🧑' : '👾') + '</div>') +
+        '<div class="stun-mark">💫</div>' +
+        '<div class="name-tag">' + unitTag(u) + '</div>' +
+        '<div class="hp-bar"><div class="hp-fill"></div></div>';
+      Object.assign(el.style, slot);
+      el.style.zIndex = 5 + i;
+      $('stage-units').appendChild(el);
+      u.el = el;
+      setUnitBar(u);
+      if (u.hp <= 0) el.classList.add('dead');
+    });
   });
-  document.querySelectorAll('#pvp-screen .party-card').forEach(c => c.onclick = () => {
-    pvpSel[c.dataset.side] = c.dataset.id;
-    renderPvpSetup();
-  });
-  document.querySelectorAll('#pvp-screen .ip-mini').forEach(c => c.onclick = () => {
-    pvpItemSel[c.dataset.side] = c.dataset.item || null;
-    renderPvpSetup();
-  });
-  $('pvp-start').disabled = !(pvpSel[1] && pvpSel[2]);
 }
 
-function mkPvpFighter(id, side) {
-  const base = HEROES[id];
-  const attr = base.attr || '무';
-  const item = pvpItemSel[side] || null;
-  // 🥄 삽 = 무상성 완전체: 스탯 배수도 전부 1배
-  const aMul = item === 'shovel' ? 1 : ATTRS[attr].atk;
-  const hMul = item === 'shovel' ? 1 : (ATTRS[attr].hpMult || 1);
-  return {
-    id, side, attr,
-    atk: Math.round(base.atk * aMul),
-    hp: Math.round(base.hp * hMul),
-    maxHp: Math.round(base.hp * hMul),
-    gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
-    hitCount: 0, stunNext: false, el: null,
-    item: pvpItemSel[side] || null, used: {},
-  };
+// ── 데미지 계산 (속성 특성 + 상성 + 도구) ──
+function rawAtk(u) {
+  const now = Date.now();
+  let raw = u.atk * (0.9 + Math.random() * 0.2);
+  if (now < u.buffUntil) raw *= u.buffMult;                       // 🐉 변신
+  const tb = B.teamBuff[u.side];
+  if (now < tb.until) raw *= tb.mult;                             // 🔮 주술 (팀 전체)
+  if (now < B.rainOn[u.side]) raw *= 0.75;                        // 🌧️ 비 맞는 중
+  raw *= itemAtkMult(u);
+  return raw;
 }
-
-function startPvp() {
-  mode = 'pvp';
-  P = { turn: 1, over: false, players: { 1: mkPvpFighter(pvpSel[1], 1), 2: mkPvpFighter(pvpSel[2], 2) } };
-  $('pvp-screen').classList.remove('on');
-  $('title-screen').style.display = 'none';
-  $('battle-screen').classList.add('on', 'stage-mode');
-  $('stage-result').classList.remove('on');
-  $('stage-units').innerHTML = '';
-  [1, 2].forEach(side => {
-    const f = P.players[side];
-    const h = HEROES[f.id];
-    const art = ART[heroKey(f.id)];
-    f.el = unitEl(
-      (art ? '<img class="body" src="' + art + '" style="height:110px">' : '<div class="body" style="font-size:64px">🧑</div>') +
-      '<div class="stun-mark">💫</div>' +
-      '<div class="name-tag">' + (side === 1 ? '1P ' : '2P ') + ATTRS[f.attr].icon + ' ' + h.name + '</div>' +
-      '<div class="hp-bar"><div class="hp-fill"></div></div>' +
-      '<div class="hp-num">' + f.hp + ' / ' + f.maxHp + '</div>',
-      side === 1 ? { left: '9%', bottom: '22%', zIndex: 5 } : { right: '9%', bottom: '22%', zIndex: 5 }
-    );
-    f.el.classList.add(side === 1 ? 'p1' : 'p2');
-  });
-  $('atk-btn').classList.add('on'); $('atk-btn').disabled = false;
-  $('ult-btn').classList.remove('on');
-  updatePvpTurnUI();
-}
-
-function setPvpHp(f) {
-  const pct = Math.max(0, f.hp / f.maxHp * 100);
-  const fill = f.el.querySelector('.hp-fill');
-  fill.style.width = pct + '%';
-  fill.classList.toggle('low', pct < 35);
-  f.el.querySelector('.hp-num').textContent = Math.max(0, Math.round(f.hp)) + ' / ' + f.maxHp;
-}
-
-function updatePvpTurnUI() {
-  const A = P.players[P.turn];
-  $('dungeon-name').textContent = (P.turn === 1 ? '🔵 1P' : '🔴 2P') + ' 차례! — ' + HEROES[A.id].name;
-  const hasGauge = HEROES[A.id].hasGauge;
-  $('gauge-wrap').classList.toggle('on', hasGauge);
-  $('gauge-wrap').classList.toggle('trans', Date.now() < A.buffUntil);
-  if (hasGauge) {
-    $('gauge-fill').style.width = A.gauge + '%';
-    $('gauge-pct').textContent = Math.floor(A.gauge) + '%';
-    document.querySelector('#gauge-label span').textContent = (P.turn === 1 ? '1P ' : '2P ') + (HEROES[A.id].skill || '⚡');
-    const ready = A.gauge >= 100 && Date.now() >= A.buffUntil;
-    $('gauge-wrap').classList.toggle('full', ready);
-    $('ult-btn').textContent = HEROES[A.id].skill || '⚡';
-    $('ult-btn').classList.toggle('on', ready);
-    $('ult-btn').disabled = !ready;
-  } else {
-    $('ult-btn').classList.remove('on');
-  }
-}
-
-// 속성 특성 + 상성을 전부 반영한 PvP 데미지 계산
-function pvpDamage(A, D, raw) {
+function calcDmg(A, D, raw) {
   let dmg = raw;
-  if (!shovelIn(A, D)) { // 🥄 삽 든 쪽이 있으면 속성 계산 전부 생략
-    // 상성: 카운터 1.5배 / 역카운터 0.7배
+  if (!shovelIn(A, D)) {                                          // 🥄 삽이면 속성 계산 전부 생략
     if ((COUNTER[A.attr] || []).includes(D.attr)) { dmg *= 1.5; popDmg(A.el, '효과 굉장!', 'crit'); }
     else if ((COUNTER[D.attr] || []).includes(A.attr)) dmg *= 0.7;
-    // 방어 특성: 수 1.3배 수비 / 암 0.7배 수비
     dmg = dmg / ATTRS[D.attr].def;
-    // 무속성: 화·수 공격 0.7배로 / 빛속성: 암 공격 0.7배로
     if (D.attr === '무' && (A.attr === '화' || A.attr === '수')) dmg *= 0.7;
     if (D.attr === '빛' && A.attr === '암') dmg *= 0.7;
   }
   return Math.max(1, Math.round(dmg));
 }
-
-function pvpAttack() {
-  if (busy || !P || P.over) return;
-  busy = true; $('atk-btn').disabled = true;
-  const A = P.players[P.turn], D = P.players[P.turn === 1 ? 2 : 1];
-  // 물소소녀: 20% 박치기 / 평소엔 물꽃 (예준 기획). 1대1은 1:1이라 박치기는 강타로
-  const isWater = A.id === 'watergirl';
-  const headbutt = isWater && Math.random() < 0.2;
-  A.el.classList.add(headbutt ? 'charge' : (A.side === 1 ? 'lunge' : 'elunge'));
-
-  setTimeout(() => {
-    A.el.classList.remove('lunge', 'elunge', 'charge');
-    if (isWater) dropWaterFlower(D.el); else dropBolt(D.el);
-    setTimeout(() => {
-      const buffed = Date.now() < A.buffUntil ? A.buffMult : 1;
-      let raw = A.atk * (0.9 + Math.random() * 0.2) * buffed * itemAtkMult(A);
-      // 🌧️ 비 맞는 중이면 내 공격력 25%↓ / 🐃 박치기는 강타
-      if (A.atkDownUntil && Date.now() < A.atkDownUntil) raw *= 0.75;
-      if (headbutt) { raw *= 1.4; popDmg(A.el, '🐃 박치기!!', 'ult'); }
-      let fireProc = false;
-      if (!shovelIn(A, D) && ATTRS[A.attr].proc2x && Math.random() < ATTRS[A.attr].proc2x) {
-        raw *= 2; fireProc = true;
-        popDmg(A.el, '🔥 2배!!', 'ult');
-      }
-      let dmg = pvpDamage(A, D, raw);
-      // 🎒 방어 도구 (침묵·풍선 무효 / 옐로카드·흑도 배수 / 부츠 반사)
-      const dd = itemDefend(D, A.attr, dmg);
-      if (dd.negateMsg) {
-        dmg = 0;
-        popDmg(D.el, dd.negateMsg, 'tickle');
-      } else {
-        dmg = dd.dmg;
-        D.hp -= dmg;
-        setPvpHp(D);
-        popDmg(D.el, dmg, (buffed > 1 || fireProc) ? 'ult' : 'crit');
-        D.el.classList.add('hurt');
-        $('arena').classList.add('shake');
-        setTimeout(() => { D.el.classList.remove('hurt'); $('arena').classList.remove('shake'); }, 300);
-        if (dd.reflectRatio) {
-          const r = Math.max(1, Math.round(dmg * dd.reflectRatio));
-          A.hp -= r;
-          setPvpHp(A);
-          popDmg(A.el, '🥾 반사 ' + r, 'crit');
-          if (A.hp <= 0) return pvpEnd(D);
-        }
-        // 🗡️ 요술단검: 딱 1번 2연타
-        if (A.item === 'dagger' && !A.used.dagger && D.hp > 0 && dmg > 0) {
-          A.used.dagger = true;
-          setTimeout(() => {
-            if (P.over || D.hp <= 0) return;
-            dropBolt(D.el);
-            popDmg(A.el, '🗡️ 2연타!', 'tickle');
-            D.hp -= dmg;
-            setPvpHp(D);
-            popDmg(D.el, dmg, 'crit');
-            if (D.hp <= 0) pvpEnd(A);
-          }, 330);
-        }
-      }
-      A.hitCount++;
-
-      // 조슨대왕 패시브: 2타마다 신하 추가타 (60%)
-      if (A.id === 'josun' && A.hitCount % 2 === 0 && D.hp > 0) {
-        spawnMinion(D.el);
-        setTimeout(() => {
-          if (D.hp <= 0 || P.over) return;
-          const md = pvpDamage(A, D, A.atk * 0.6);
-          D.hp -= md; setPvpHp(D);
-          popDmg(D.el, md, 'crit');
-          if (D.hp <= 0) pvpEnd(A);
-        }, 380);
-      }
-      // 백울프 패시브: 25% 스턴 → 상대 다음 턴 건너뜀
-      if (A.id === 'wolf' && D.hp > 0 && Math.random() < 0.25) {
-        D.stunNext = true;
-        D.el.classList.add('stunned');
-      }
-      // 물소소녀 패시브: 물꽃이 비를 부름 (25%) → 상대 공격력 25%↓ 10초
-      if (isWater && !headbutt && D.hp > 0 && Math.random() < 0.25) {
-        D.atkDownUntil = Date.now() + 10000;
-        showRain(true);
-        popDmg(A.el, '🌧️ 비!', 'tickle');
-      }
-      // 게이지 충전
-      if (HEROES[A.id].hasGauge && Date.now() >= A.buffUntil) A.gauge = Math.min(100, A.gauge + 22);
-
-      setTimeout(() => {
-        if (P.over) return;
-        if (D.hp <= 0) return pvpEnd(A);
-        // 턴 넘기기 (스턴이면 상대 턴 건너뛰고 다시 내 턴)
-        if (D.stunNext) {
-          D.stunNext = false;
-          D.el.classList.remove('stunned');
-          popDmg(D.el, '💫 기절! 턴 건너뜀', 'tickle');
-        } else {
-          P.turn = P.turn === 1 ? 2 : 1;
-        }
-        updatePvpTurnUI();
-        busy = false; $('atk-btn').disabled = false;
-      }, 650);
-    }, 300);
-  }, 150);
+function applyHit(A, D, dmg, cls) {
+  if (!B || B.over || D.hp <= 0) return;
+  const dd = itemDefend(D, A.attr, dmg);                          // 🎒 방어 도구
+  if (dd.negateMsg) { popDmg(D.el, dd.negateMsg, 'tickle'); return; }
+  D.hp -= dd.dmg;
+  setUnitBar(D);
+  popDmg(D.el, dd.dmg, cls);
+  D.el.classList.add('hurt');
+  $('arena').classList.add('shake');
+  setTimeout(() => { D.el.classList.remove('hurt'); $('arena').classList.remove('shake'); }, 260);
+  if (dd.reflectRatio) {                                          // 🥾 천년부츠 반사
+    const r = Math.max(1, Math.round(dd.dmg * dd.reflectRatio));
+    A.hp -= r; setUnitBar(A); popDmg(A.el, '🥾' + r, 'heropain');
+    if (A.hp <= 0) A.el.classList.add('dead');
+  }
+  if (D.hp <= 0) D.el.classList.add('dead');
+  checkEnd();
 }
 
-function pvpSkill() {
-  if (busy || !P || P.over) return;
-  const A = P.players[P.turn];
-  if (!HEROES[A.id].hasGauge || A.gauge < 100 || Date.now() < A.buffUntil) return;
-  A.gauge = 0;
+// ── 유닛 1회 행동 ──
+function unitAct(u) {
+  const foes = B.teams[opp(u.side)].filter(x => x.hp > 0);
+  if (!foes.length) return;
+  // 스킬 게이지가 다 찼으면 자동 발동
+  if (u.kind === 'hero' && u.hasGauge && u.gauge >= 100 && Date.now() >= u.buffUntil) return fireSkill(u);
+
+  const target = foes[0];
+  const isWater = u.id === 'watergirl';
+  const headbutt = isWater && Math.random() < 0.2;                // 🐃 20% 박치기
+  u.el.classList.add(headbutt ? 'charge' : (u.side === 'A' ? 'lunge' : 'elunge'));
+  setTimeout(() => u.el.classList.remove('lunge', 'elunge', 'charge'), 280);
+  if (u.kind === 'hero') { if (isWater) dropWaterFlower(target.el); else dropBolt(target.el); }
+
+  let raw = rawAtk(u);
+  let fire = false;
+  if (!shovelIn(u, target) && ATTRS[u.attr].proc2x && Math.random() < ATTRS[u.attr].proc2x) {
+    raw *= 2; fire = true; popDmg(u.el, '🔥 2배!!', 'ult');        // 🔥 화속성 5%
+  }
+  u.hitCount++;
+
+  if (headbutt) {
+    popDmg(u.el, '🐃 박치기!!', 'ult');
+    foes.forEach((f, i) => {
+      f.el.classList.add('blown');
+      setTimeout(() => f.el.classList.remove('blown'), 500);
+      setTimeout(() => applyHit(u, f, calcDmg(u, f, raw * 0.7), 'crit'), i * 90);
+    });
+  } else {
+    applyHit(u, target, calcDmg(u, target, raw), fire ? 'ult' : 'crit');
+    if (isWater && Math.random() < 0.25) {                        // 🌧️ 물꽃이 비를 부름
+      B.rainOn[opp(u.side)] = Date.now() + 10000;
+      showRain(true);
+      popDmg(u.el, '🌧️ 비!', 'tickle');
+    }
+    if (u.item === 'dagger' && !u.used.dagger) {                  // 🔪 요술단검 2연타
+      u.used.dagger = true;
+      setTimeout(() => {
+        if (!B || B.over || target.hp <= 0) return;
+        popDmg(u.el, '🗡️ 2연타!', 'tickle');
+        applyHit(u, target, calcDmg(u, target, raw), 'crit');
+      }, 320);
+    }
+  }
+  // 👑 조슨대왕: 2타마다 신하 소환
+  if (u.id === 'josun' && u.hitCount % 2 === 0) {
+    const t2 = B.teams[opp(u.side)].find(x => x.hp > 0);
+    if (t2) {
+      spawnMinion(t2.el);
+      setTimeout(() => { if (B && !B.over && t2.hp > 0) applyHit(u, t2, calcDmg(u, t2, u.atk * 0.6), 'crit'); }, 340);
+    }
+  }
+  // 🐺 백울프: 25% 스턴
+  if (u.id === 'wolf' && target.hp > 0 && Math.random() < 0.25) {
+    target.stunned = true; target.el.classList.add('stunned');
+  }
+  // 🍄 독
+  if (u.kind === 'mon' && u.poison && target.hp > 0) {
+    target.hp -= u.poison; setUnitBar(target);
+    popDmg(target.el, '☠️' + u.poison, 'tickle');
+    if (target.hp <= 0) { target.el.classList.add('dead'); checkEnd(); }
+  }
+  // 게이지 충전
+  if (u.kind === 'hero' && u.hasGauge && Date.now() >= u.buffUntil) u.gauge = Math.min(100, u.gauge + GAUGE_PER_HIT);
+}
+
+function fireSkill(u) {
+  u.gauge = 0;
   $('flash').classList.add('on');
   spawnUltBurst();
-  setTimeout(() => $('flash').classList.remove('on'), 700);
-  if (A.id === 'draebeo') {
-    A.buffMult = 1.6; A.buffUntil = Date.now() + 60000; A.transformed = true;
-    if (ART.legend2) A.el.querySelector('img.body').src = ART.legend2;
-  } else if (A.id === 'priest') {
-    A.buffMult = 2; A.buffUntil = Date.now() + 10000;
+  setTimeout(() => $('flash').classList.remove('on'), 600);
+  if (u.id === 'draebeo') {                                        // 🐉 변신
+    u.buffMult = TRANSFORM_DMG; u.buffUntil = Date.now() + TRANSFORM_SEC * 1000; u.transformed = true;
+    const img = u.el.querySelector('img.body');
+    if (ART.legend2 && img) img.src = ART.legend2;
+    u.name = '정룡술사';
+    u.el.querySelector('.name-tag').innerHTML = unitTag(u);
+    popDmg(u.el, '🐉 변신!', 'ult');
+  } else if (u.id === 'priest') {                                  // 🔮 주술: 팀 전체 2배
+    B.teamBuff[u.side] = { mult: 2, until: Date.now() + 10000 };
+    popDmg(u.el, '🔮 주술! 팀 공격력 2배', 'ult');
   }
-  updatePvpTurnUI();
 }
 
-// 변신 지속 종료 처리 (1초 틱)
-setInterval(() => {
-  if (mode !== 'pvp' || !P || P.over) return;
-  // 🌧️ 비 종료 (둘 다 안 맞고 있으면 끄기)
-  const raining = [1, 2].some(s => P.players[s].atkDownUntil && Date.now() < P.players[s].atkDownUntil);
-  showRain(raining);
-  [1, 2].forEach(side => {
-    const f = P.players[side];
-    if (f.transformed && Date.now() >= f.buffUntil) {
-      f.transformed = false; f.buffMult = 1;
-      if (ART.legend) f.el.querySelector('img.body').src = ART.legend;
+// ── 전투 루프 ──
+function battleTick() {
+  if (!B || B.over) return;
+  const now = Date.now();
+  // 비 종료
+  if (!(now < B.rainOn.A || now < B.rainOn.B)) showRain(false);
+  // 변신 종료
+  ['A', 'B'].forEach(side => B.teams[side].forEach(u => {
+    if (u.transformed && now >= u.buffUntil) {
+      u.transformed = false; u.buffMult = 1; u.name = HEROES[u.id].name;
+      const img = u.el && u.el.querySelector('img.body');
+      if (ART.legend && img) img.src = ART.legend;
+      if (u.el) u.el.querySelector('.name-tag').innerHTML = unitTag(u);
     }
+  }));
+  updateBattleHud();
+  if (B.paused) return;
+  // 각 유닛이 쿨타임마다 행동
+  ['A', 'B'].forEach(side => B.teams[side].forEach(u => {
+    if (B.over || u.hp <= 0 || now < u.nextAt) return;
+    u.nextAt = now + ATK_CD / B.speed;
+    if (u.stunned) {                                               // 스턴이면 이번 행동 스킵
+      u.stunned = false; u.el.classList.remove('stunned');
+      popDmg(u.el, '💫 기절!', 'tickle');
+      return;
+    }
+    unitAct(u);
+  }));
+  // 게이지 자동 충전 (초당 대신 틱당 환산)
+  B.teams.A.concat(B.teams.B).forEach(u => {
+    if (u.kind === 'hero' && u.hasGauge && u.hp > 0 && Date.now() >= u.buffUntil)
+      u.gauge = Math.min(100, u.gauge + GAUGE_PER_SEC * 0.2 * B.speed);
   });
-  updatePvpTurnUI();
-}, 1000);
+}
+function updateBattleHud() {
+  const lead = B.teams.A.find(u => u.hp > 0);
+  const g = lead && lead.hasGauge ? Math.floor(lead.gauge) : null;
+  $('gauge-wrap').classList.toggle('on', g !== null);
+  if (g !== null) {
+    $('gauge-fill').style.width = g + '%';
+    $('gauge-pct').textContent = g + '%';
+    document.querySelector('#gauge-label span').textContent = lead.skill || '⚡';
+    $('gauge-wrap').classList.toggle('full', g >= 100);
+    $('gauge-wrap').classList.toggle('trans', Date.now() < lead.buffUntil);
+  }
+}
+function startLoop() {
+  clearInterval(battleTimer);
+  battleTimer = setInterval(battleTick, 200);
+}
+function stopLoop() { clearInterval(battleTimer); battleTimer = null; }
 
-function pvpEnd(winner) {
-  P.over = true;
+function checkEnd() {
+  if (!B || B.over) return;
+  const aAlive = B.teams.A.some(u => u.hp > 0);
+  const bAlive = B.teams.B.some(u => u.hp > 0);
+  if (!aAlive) { B.over = true; stopLoop(); setTimeout(() => (B.kind === 'stage' ? stageLose() : pvpEnd('B')), 700); }
+  else if (!bAlive) {
+    if (B.kind === 'pvp') { B.over = true; stopLoop(); setTimeout(() => pvpEnd('A'), 700); }
+    else if (B.seg >= B.segTotal) { B.over = true; stopLoop(); setTimeout(stageWin, 700); }
+    else setTimeout(nextSegment, 800);
+  }
+}
+
+// ── 던전 (자동사냥) ──
+function startStage(n) {
+  mode = 'stage';
+  const deck = myDeck();
+  if (!deck.length) return;
+  B = mkBattle('stage');
+  B.stage = n; B.seg = 0; B.segTotal = segCount(n);
+  B.teams.A = deck.map(id => mkHero(id, 'A'));
+  $('stage-screen').classList.remove('on');
+  $('title-screen').style.display = 'none';
+  $('battle-screen').classList.add('on', 'stage-mode');
+  $('stage-result').classList.remove('on');
+  showRain(false);
+  setAutoControls(true);
+  nextSegment();
+  startLoop();
+}
+function nextSegment() {
+  if (!B || B.over) return;
+  B.seg++;
+  const isBoss = B.stage === 10 && B.seg === B.segTotal;
+  const pool = stagePool(B.stage);
+  const types = isBoss ? ['king']
+    : Array.from({ length: 2 + (Math.random() < 0.4 ? 1 : 0) }, () => pool[Math.floor(Math.random() * pool.length)]);
+  const hpScale = 1 + (B.stage - 1) * 0.12, atkScale = 1 + (B.stage - 1) * 0.05;
+  B.teams.B = types.map(t => mkMon(t, 'B', hpScale, atkScale));
+  renderField();
+  const now = Date.now();
+  B.teams.B.forEach((u, i) => {
+    u.nextAt = now + 900 + i * 250;
+    u.el.style.opacity = 0; u.el.style.transform = 'translateX(60px)';
+    setTimeout(() => { u.el.style.transition = 'all .45s ease-out'; u.el.style.opacity = 1; u.el.style.transform = 'none'; }, 60 + i * 140);
+  });
+  B.teams.A.forEach(u => { if (u.nextAt < now) u.nextAt = now + 600; });
+  $('dungeon-name').textContent = isBoss
+    ? '1-10 즈은하시티 · 👑 보스전!'
+    : '1-' + B.stage + ' 즈은하시티 · 길 ' + B.seg + '/' + B.segTotal + ' · 자동사냥';
+}
+
+// ── 자동사냥 컨트롤 ──
+function setAutoControls(on) {
+  $('atk-btn').classList.remove('on');
+  $('ult-btn').classList.remove('on');
+  $('auto-controls').classList.toggle('on', on);
+  if (on) {
+    $('pause-btn').textContent = '⏸ 일시정지';
+    $('speed-btn').textContent = '⏩ x1';
+  }
+}
+$('pause-btn').onclick = () => {
+  if (!B) return;
+  B.paused = !B.paused;
+  $('pause-btn').textContent = B.paused ? '▶ 계속' : '⏸ 일시정지';
+  if (!B.paused) { const now = Date.now(); B.teams.A.concat(B.teams.B).forEach(u => { if (u.nextAt < now) u.nextAt = now + 300; }); }
+};
+$('speed-btn').onclick = () => {
+  if (!B) return;
+  B.speed = B.speed === 1 ? 2 : B.speed === 2 ? 3 : 1;
+  $('speed-btn').textContent = '⏩ x' + B.speed;
+};
+
+// ── 승리 / 패배 / 나가기 ──
+function stageWin() {
+  const n = B.stage;
+  const first = !(saveData.cleared || []).includes(String(n));
+  const candy = 4 + n, tickets = first ? 3 : 1;
+  saveData.candy = (saveData.candy || 0) + candy;
+  saveData.tickets += tickets;
+  let lvHtml = '';
+  if (first) {
+    saveData.cleared = [...(saveData.cleared || []), String(n)];
+    // 스토리 첫 클리어 = 출전한 덱 전원 레벨 +1 (예준 기획)
+    const ups = [];
+    B.teams.A.forEach(u => {
+      const cur = (saveData.lv || {})[u.id] || 1;
+      if (cur < 15) { saveData.lv[u.id] = cur + 1; ups.push(HEROES[u.id].name + ' Lv.' + (cur + 1)); }
+    });
+    if (ups.length) lvHtml = '<br>📈 <b style="color:#7cf76a">' + ups.join(' · ') + '</b>';
+  }
+  // 🎒 도구 드랍
+  let dropHtml = '';
+  const unowned = Object.keys(ITEMS).filter(i => !saveData.items[i]);
+  if (n === 10 || Math.random() < 0.3) {
+    if (unowned.length) {
+      const drop = unowned[Math.floor(Math.random() * unowned.length)];
+      saveData.items[drop] = true;
+      dropHtml = '<br><div style="margin-top:6px">🎁 <b style="color:#ffd94a">도구 획득: ' + ITEMS[drop].name + '!</b><br>' +
+        '<span style="font-size:12px;color:#9c92c4">' + ITEMS[drop].desc + '</span></div>';
+    } else { saveData.candy += 3; dropHtml = '<br>🎒 도구를 다 모아서 ⭐ 별사탕 +3 추가!'; }
+  }
+  persist();
+  if (ART.chest) { $('result-chest').src = ART.chest; $('result-chest').style.display = 'block'; }
+  $('result-title').textContent = '🎉 1-' + n + ' 클리어!';
+  $('result-rewards').innerHTML = '⭐ 별사탕 +' + candy + '<br>🎟️ 뽑기권 +' + tickets + (first ? ' (첫 클리어!)' : '') + lvHtml + dropHtml;
+  $('result-actions').innerHTML = '<button class="result-action" id="result-ok">확인</button>';
+  $('result-ok').onclick = exitBattle;
+  $('stage-result').classList.add('on');
+}
+function stageLose() {
+  const n = B.stage;
   $('result-chest').style.display = 'none';
-  $('result-title').textContent = (winner.side === 1 ? '🔵 1P' : '🔴 2P') + ' 승리!! 🏆';
-  $('result-rewards').textContent = HEROES[winner.id].name + '의 승리! 친선전이라 보상은 우정입니다.';
+  $('result-title').textContent = '💀 덱 전멸...';
+  $('result-rewards').textContent = '즈은하시티는 만만하지 않다! 덱을 바꾸거나 레벨을 올려보자.';
+  $('result-actions').innerHTML =
+    '<button class="result-action" id="result-retry">다시 도전</button>' +
+    '<button class="result-action" id="result-exit">나가기</button>';
+  $('result-retry').onclick = () => { $('stage-result').classList.remove('on'); startStage(n); };
+  $('result-exit').onclick = exitBattle;
+  $('stage-result').classList.add('on');
+}
+function exitBattle() {
+  stopLoop();
+  const wasPvp = B && B.kind === 'pvp';
+  mode = 'menu'; busy = false; B = null;
+  $('stage-result').classList.remove('on');
+  $('battle-screen').classList.remove('on', 'stage-mode');
+  $('stage-units').innerHTML = '';
+  $('auto-controls').classList.remove('on');
+  $('gauge-wrap').classList.remove('on', 'full', 'trans');
+  showRain(false);
+  $('title-screen').style.display = '';
+  if (wasPvp) { renderPvpSetup(); $('pvp-screen').classList.add('on'); }
+  else { renderStages(); $('stage-screen').classList.add('on'); }
+}
+$('flee-btn').onclick = () => { if (mode === 'stage' || mode === 'pvp') exitBattle(); };
+
+// ═══════════ 1대1 대결 — 3v3 덱 자동 전투 (기획: 구예준) ═══════════
+const pvpDeck = { 1: [], 2: [] };
+
+function renderPvpSetup() {
+  [1, 2].forEach(side => {
+    pvpDeck[side] = normDeck(pvpDeck[side]);
+    renderDeckRow($('pvp-pick' + side), pvpDeck[side], id => {
+      const r = deckToggle(pvpDeck[side], id);
+      pvpDeck[side] = r.deck;
+      $('pvp-msg').textContent = r.msg;
+      renderPvpSetup();
+    }, side === 1 ? '🔵1P' : '🔴2P');
+    const items = pvpDeck[side].map(id => (saveData.equip || {})[id]).filter(Boolean);
+    $('pvp-item' + side).innerHTML = '<div class="side-label">🎒</div>' +
+      (items.length ? items.map(i => '<div class="ip-mini" title="' + ITEMS[i].name + '">' + itemArt(i) + '</div>').join('')
+                    : '<div style="font-size:11px;color:#9c92c4">도구는 캐릭터 화면에서 장착!</div>');
+  });
+  $('pvp-start').disabled = !(pvpDeck[1].length && pvpDeck[2].length);
+}
+function startPvp() {
+  mode = 'pvp';
+  B = mkBattle('pvp');
+  B.teams.A = pvpDeck[1].map(id => mkHero(id, 'A'));
+  B.teams.B = pvpDeck[2].map(id => mkHero(id, 'B'));
+  $('pvp-screen').classList.remove('on');
+  $('title-screen').style.display = 'none';
+  $('battle-screen').classList.add('on', 'stage-mode');
+  $('stage-result').classList.remove('on');
+  showRain(false);
+  setAutoControls(true);
+  renderField();
+  const now = Date.now();
+  B.teams.A.concat(B.teams.B).forEach((u, i) => { u.nextAt = now + 700 + (i % 3) * 150; });
+  $('dungeon-name').textContent = '⚔️ 🔵1P vs 🔴2P — 자동 전투!';
+  startLoop();
+}
+function pvpEnd(winSide) {
+  const winner = winSide === 'A' ? '🔵 1P' : '🔴 2P';
+  $('result-chest').style.display = 'none';
+  $('result-title').textContent = winner + ' 승리!! 🏆';
+  $('result-rewards').textContent = '친선전이라 보상은 우정입니다.';
   $('result-actions').innerHTML =
     '<button class="result-action" id="pvp-rematch">다시 대결</button>' +
     '<button class="result-action" id="pvp-exit">나가기</button>';
   $('pvp-rematch').onclick = () => { $('stage-result').classList.remove('on'); startPvp(); };
-  $('pvp-exit').onclick = exitPvp;
+  $('pvp-exit').onclick = exitBattle;
   $('stage-result').classList.add('on');
 }
-function exitPvp() {
-  mode = 'menu';
-  busy = false; P = null;
-  $('stage-result').classList.remove('on');
-  $('battle-screen').classList.remove('on', 'stage-mode');
-  $('stage-units').innerHTML = '';
-  $('atk-btn').classList.remove('on');
-  $('ult-btn').classList.remove('on');
-  $('gauge-wrap').classList.remove('on', 'full', 'trans');
-  showRain(false);
-  $('title-screen').style.display = '';
-  renderPvpSetup();
-  $('pvp-screen').classList.add('on');
-}
-
 $('pvp-open').onclick = () => { renderPvpSetup(); $('pvp-screen').classList.add('on'); };
-$('pvp-start').onclick = () => { if (pvpSel[1] && pvpSel[2]) startPvp(); };
+$('pvp-start').onclick = () => { if (pvpDeck[1].length && pvpDeck[2].length) startPvp(); };
+
 
 // ── 진입점: 플레이 버튼 → 스테이지 선택 ──
 $('start-btn').onclick = () => {
