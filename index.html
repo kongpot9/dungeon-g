@@ -76,6 +76,36 @@
   .pick-row .party-card.sel { border-color: #ffd94a; }
   #pvp-start:disabled { filter: grayscale(1) brightness(.6); }
 
+  /* ── 📖 스토리 (대본: 구예준) ── */
+  #story-screen {
+    position: absolute; inset: 0; z-index: 98; display: none; cursor: pointer;
+    background: linear-gradient(180deg, rgba(10,6,22,.72), rgba(10,6,22,.92));
+    background-size: cover; background-position: center;
+  }
+  #story-screen.on { display: block; }
+  #story-skip {
+    position: absolute; top: 10px; right: 12px; z-index: 3;
+    padding: 7px 14px; font-size: 13px; font-weight: 900; color: #e8e2ff;
+    background: rgba(36,29,61,.9); border: 2px solid #5a4d8a; border-radius: 10px; cursor: pointer;
+  }
+  #story-skip:active { transform: translateY(2px); }
+  #story-portrait { position: absolute; left: 6%; bottom: 108px; }
+  #story-portrait img { max-height: 150px; max-width: 130px; filter: drop-shadow(0 8px 14px rgba(0,0,0,.6)); animation: breathe 2.4s ease-in-out infinite; }
+  #story-box {
+    position: absolute; left: 14px; right: 14px; bottom: 14px; min-height: 88px;
+    padding: 14px 18px 20px; background: linear-gradient(180deg,#241d3d,#1a142e);
+    border: 3px solid #5a4d8a; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,.6);
+  }
+  #story-speaker { display: inline-block; margin-top: -28px; margin-bottom: 6px; padding: 4px 14px; font-size: 14px; font-weight: 800; color: #2b1c05; background: linear-gradient(180deg,#ffe9a0,#f0a93a); border-radius: 10px; }
+  #story-text { color: #f0ecff; font-size: 16px; line-height: 1.55; min-height: 42px; }
+  #story-next { position: absolute; right: 14px; bottom: 6px; color: #f5b53f; font-size: 13px; animation: blink 1s infinite; }
+  @media (max-height: 430px) {
+    #story-portrait { bottom: 96px; }
+    #story-portrait img { max-height: 108px; }
+    #story-box { min-height: 72px; padding: 12px 14px 18px; }
+    #story-text { font-size: 14px; min-height: 34px; }
+  }
+
   /* ── 🎬 영화관 (예준 기획) ── */
   #movie-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 6px; }
   #popcorn-box { display: flex; align-items: center; gap: 14px; padding: 10px 18px; background: linear-gradient(180deg,#2a2240,#1a142e); border: 3px solid #ffd94a; border-radius: 16px; box-shadow: 0 0 18px rgba(255,217,74,.25); }
@@ -631,6 +661,17 @@
       <button id="watch-btn">🎬 영화 보기 (⭐10)</button>
       <div id="movie-msg"></div>
       <div id="card-info"></div>
+    </div>
+  </div>
+
+  <!-- 📖 스토리 (대본: 구예준) -->
+  <div id="story-screen">
+    <button id="story-skip">⏭️ 스킵</button>
+    <div id="story-portrait"></div>
+    <div id="story-box">
+      <span id="story-speaker"></span>
+      <div id="story-text"></div>
+      <div id="story-next">▼ 터치</div>
     </div>
   </div>
 
@@ -1318,6 +1359,84 @@ $('ip-close').onclick = () => $('item-picker').classList.remove('on');
 $('cd-close').onclick = () => $('char-detail').classList.remove('on');
 $('char-detail').onclick = e => { if (e.target.id === 'char-detail') $('char-detail').classList.remove('on'); };
 
+// ═══════════ 📖 스토리 (대본: 구예준) ═══════════
+// ┌─ 대본 쓰는 법 ─────────────────────────────────────────────┐
+// │ 스테이지 번호 아래에 before(전투 전) / after(클리어 후)를 쓴다.  │
+// │ { who: '말하는 사람', text: '대사', art: '캐릭터id' }          │
+// │ art는 선택 — 넣으면 그 캐릭터 그림이 옆에 뜬다                  │
+// │ (쓸 수 있는 id: draebeo, priest, watergirl, josun, wolf,     │
+// │            slime, king, bat, mushroom, tree)                │
+// └───────────────────────────────────────────────────────────┘
+const STORY = {
+  1: {
+    before: [
+      // ⚠️ 임시 대본 — 예준이 진짜 대본 주면 통째로 교체!
+      { who: '???', text: '즈은하시티에 오신 걸 환영합니다. 여기서부턴 진짜 던전이에요.' },
+      { who: '드래베오', text: '...대사 톤이 왜 이렇게 진지하지? 나 개그동아리인데.', art: 'draebeo' },
+    ],
+    after: [
+      { who: '슬라임', text: '(뿌직)', art: 'slime' },
+    ],
+  },
+  // 2: { before: [...], after: [...] },
+  // 10: { before: [...], after: [...] },   ← 보스전 대본도 여기에
+};
+
+let storyLines = [], storyIdx = -1, storyDone = null, storyTimer = null;
+function playStory(lines, onDone) {
+  if (!lines || !lines.length) return onDone();
+  storyLines = lines; storyIdx = -1; storyDone = onDone;
+  // 던전 맵을 배경으로 (있으면)
+  $('story-screen').style.backgroundImage = ART.map
+    ? 'linear-gradient(180deg, rgba(10,6,22,.72), rgba(10,6,22,.92)), url("' + ART.map + '")' : '';
+  $('story-screen').classList.add('on');
+  storyNext();
+}
+function storyNext() {
+  storyIdx++;
+  if (storyIdx >= storyLines.length) return storyFinish();
+  const l = storyLines[storyIdx];
+  $('story-speaker').textContent = l.who || '';
+  $('story-portrait').innerHTML = l.art && ART[heroKey(l.art)]
+    ? '<img src="' + ART[heroKey(l.art)] + '" alt="">' : '';
+  clearInterval(storyTimer);
+  const el = $('story-text');
+  el.textContent = '';
+  let i = 0;
+  storyTimer = setInterval(() => {
+    el.textContent = l.text.slice(0, ++i);
+    if (i >= l.text.length) clearInterval(storyTimer);
+  }, 26);
+}
+function storyFinish() {
+  clearInterval(storyTimer);
+  $('story-screen').classList.remove('on');
+  const cb = storyDone; storyDone = null; storyLines = [];
+  if (cb) cb();
+}
+$('story-screen').onclick = e => {
+  if (e.target.id === 'story-skip') return;
+  // 타이핑 중이면 전체 표시, 아니면 다음 줄
+  const l = storyLines[storyIdx];
+  if (l && $('story-text').textContent.length < l.text.length) {
+    clearInterval(storyTimer);
+    $('story-text').textContent = l.text;
+  } else storyNext();
+};
+// ⏭️ 스킵 — 냉혹한 극 T / 배틀만 하고 싶은 스파르타용 (예준 기획)
+$('story-skip').onclick = e => { e.stopPropagation(); storyFinish(); };
+
+// 이미 본 스토리는 자동 스킵 (재도전 때 안 나옴)
+function seenStory(key) { return (saveData.storySeen || {})[key]; }
+function markStory(key) { saveData.storySeen = saveData.storySeen || {}; saveData.storySeen[key] = true; persist(); }
+function runStory(stageNo, when, onDone) {
+  const s = STORY[stageNo];
+  const key = stageNo + '-' + when;
+  if (!s || !s[when] || seenStory(key)) return onDone();
+  markStory(key);
+  playStory(s[when], onDone);
+}
+
 // ═══════════ 🎬 영화관 (기획: 구예준) ═══════════
 // 던전 → ⭐별사탕 → 🍿팝콘 업그레이드 → 영화 관람 → 📜레벨업카드 / 🎒도구 / 🎫티켓
 const WATCH_COST = 10;            // 관람비 (던전 1~2판이면 충분)
@@ -1565,7 +1684,7 @@ function renderStages() {
     if (b.classList.contains('locked')) { $('stage-msg').textContent = '이전 스테이지를 먼저 깨야 해!'; return; }
     if (b.dataset.stage === 'tut') return startTutorial();
     if (!myDeck().length) { $('stage-msg').textContent = '덱이 비었어! 🎰 뽑기 먼저!'; return; }
-    startStage(parseInt(b.dataset.stage));
+    enterStage(parseInt(b.dataset.stage));
   });
   refreshCandy(); refreshTickets();
 }
@@ -1876,6 +1995,12 @@ function checkEnd() {
 }
 
 // ── 던전 (자동사냥) ──
+// 스테이지 입장: 전투 전 스토리 → 전투
+function enterStage(n) {
+  if (!myDeck().length) return;
+  $('stage-screen').classList.remove('on');
+  runStory(n, 'before', () => startStage(n));
+}
 function startStage(n) {
   mode = 'stage';
   const deck = myDeck();
@@ -1939,6 +2064,13 @@ $('speed-btn').onclick = () => {
 // ── 승리 / 패배 / 나가기 ──
 function stageWin() {
   const n = B.stage;
+  // 클리어 후 스토리 → 보상 화면
+  if (!seenStory(n + '-after') && STORY[n] && STORY[n].after) {
+    return runStory(n, 'after', () => showStageReward(n));
+  }
+  showStageReward(n);
+}
+function showStageReward(n) {
   const first = !(saveData.cleared || []).includes(String(n));
   const candy = 4 + n, tickets = first ? 3 : 1;
   saveData.candy = (saveData.candy || 0) + candy;
