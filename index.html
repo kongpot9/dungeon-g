@@ -1167,7 +1167,7 @@ const CHARS = [
     story: '백호 가면을 쓴 늑대 전사. 너무 조용히 다가와서 적이 깜짝 놀라 기절한다. 그게 스턴이다.' },
   { id: 'priest',  name: '첫사랑성직자', rank: '영웅', stars: '★★★★',  rate: 13.5, desc: '주술: 아군 공격력 2배 (10초)',
     story: '첫사랑을 아직도 못 잊어서 매일 밤 촛불에 소원을 빈다. 주술의 정체는 사실... 간절한 응원의 힘이다.' },
-  { id: 'watergirl', name: '물소소녀',  rank: '영웅', stars: '★★★★',  rate: 13.5, desc: '물꽃 평타 · 20% 박치기로 적 전체 쓸어버림 · 비가 오면 적 공격력 25%↓',
+  { id: 'watergirl', name: '물소소녀',  rank: '영웅', stars: '★★★★',  rate: 13.5, age: 16, desc: '물꽃 평타 · 20% 박치기로 적 전체 쓸어버림 · 비가 오면 적 공격력 25%↓',
     story: '물소의 뿔을 가진 소녀. 위에서 물꽃을 떨어뜨리다가, 가끔 참지 못하고 그냥 박치기를 한다.' },
   { id: 'draebeo', name: '드래베오',    rank: '전설', stars: '★★★★★', rate: 3,  desc: '변신: 정룡술사 (평타 1.6배)',
     story: '용을 다루는 대학생입니다. 원래는 대학 개그동아리 소속인데 하필 맡은 대사가 전부 간지나는 것들뿐이라... 가끔씩 현타로 인해 반쯤 미친다고 합니다.' }, // 스토리: 구예준
@@ -1278,7 +1278,7 @@ function openCharDetail(id) {
     const h = HEROES[id];
     const mult = 1 + 0.08 * (lv - 1);
     $('cd-name').textContent = c.name;
-    $('cd-rank').textContent = c.stars + ' ' + c.rank;
+    $('cd-rank').textContent = c.stars + ' ' + c.rank + (c.age ? ' · ' + c.age + '살' : '');
     $('cd-lv').textContent = 'Lv.' + lv + ' / 15' + (lv >= 15 ? ' 👑 만렙!' : '');
     const at = ATTRS[h.attr || '무'];
     $('cd-stats').innerHTML = '⚔️ 공격력 ' + Math.round(h.atk * mult * at.atk) + ' &nbsp;&nbsp; ❤️ 체력 ' + Math.round(h.hp * mult * (at.hpMult || 1)) +
