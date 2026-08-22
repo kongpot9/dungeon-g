@@ -1239,7 +1239,16 @@ function doPullResult(pick, isSpecial) {
   }, legendary ? 2800 : 1400);
 }
 
-function levelCost(lv) { return lv * 5; } // 별사탕 레벨업 비용 (Lv.1→2 = 5개, Lv.2→3 = 10개...)
+// ── 레벨 시스템 (예준 기획: 만렙 100, 등급 높을수록·레벨 높을수록 별사탕 많이 필요) ──
+const MAX_LV = 100;
+const RANK_MULT = { 희귀: 1, 영웅: 1.5, 전설: 2 };   // 등급이 높을수록 비쌈
+function rankOf(id) { const c = CHARS.find(x => x.id === id); return c ? c.rank : '희귀'; }
+function levelCost(lv, id) {
+  // 레벨이 오를수록도 비싸짐 (Lv.1→2 = 2, Lv.50→51 = 100, Lv.99→100 = 198 × 등급배수)
+  return Math.max(1, Math.round(lv * 2 * (RANK_MULT[rankOf(id)] || 1)));
+}
+// 📜 레벨업 카드: 높은 레벨일수록 여러 장 필요 (영화관 무한 레벨업 방지)
+function cardCost(lv, id) { return Math.max(1, Math.ceil(levelCost(lv, id) / 10)); }
 function renderDex() {
   const owned = CHARS.filter(c => saveData.coll[c.id]).length;
   saveData.lv = saveData.lv || {};
@@ -1249,7 +1258,7 @@ function renderDex() {
     return '<div class="dex-card' + (n ? '' : ' locked') + '" data-id="' + c.id + '">' + charArt(c.id) +
       '<div style="font-weight:900">' + (n ? c.name : '???') + '</div>' +
       '<div style="font-size:12px;color:#ffd94a">' + c.stars + ' ' + c.rank + '</div>' +
-      (n ? '<div style="color:#7cf76a;font-weight:800;font-size:12px">Lv.' + lv + ' / 15</div>' : '') +
+      (n ? '<div style="color:#7cf76a;font-weight:800;font-size:12px">Lv.' + lv + ' / ' + MAX_LV + '</div>' : '') +
       '<div class="dex-count">' + (n ? '👆 탭해서 자세히!' : '미획득') + '</div></div>';
   }).join('');
   document.querySelectorAll('.dex-card').forEach(card => card.onclick = () => openCharDetail(card.dataset.id));
@@ -1276,10 +1285,10 @@ function openCharDetail(id) {
   } else {
     const lv = (saveData.lv || {})[id] || 1;
     const h = HEROES[id];
-    const mult = 1 + 0.08 * (lv - 1);
+    const mult = 1 + 0.02 * (lv - 1);   // 전투 계산과 동일 (레벨당 +2%)
     $('cd-name').textContent = c.name;
     $('cd-rank').textContent = c.stars + ' ' + c.rank + (c.age ? ' · ' + c.age + '살' : '');
-    $('cd-lv').textContent = 'Lv.' + lv + ' / 15' + (lv >= 15 ? ' 👑 만렙!' : '');
+    $('cd-lv').textContent = 'Lv.' + lv + ' / ' + MAX_LV + (lv >= MAX_LV ? ' 👑 만렙!' : '');
     const at = ATTRS[h.attr || '무'];
     $('cd-stats').innerHTML = '⚔️ 공격력 ' + Math.round(h.atk * mult * at.atk) + ' &nbsp;&nbsp; ❤️ 체력 ' + Math.round(h.hp * mult * (at.hpMult || 1)) +
       '<br>' + at.icon + ' <b>' + at.name + '</b> — ' + at.desc;
@@ -1292,25 +1301,29 @@ function openCharDetail(id) {
         '<div style="font-size:12px;color:#e8e2ff">🎒 ' + (equipped ? ITEMS[equipped].name : '도구 없음') + '</div>' +
         '<button class="lvl-btn" id="cd-equip-btn">바꾸기</button>' +
       '</div>' +
-      (lv < 15
-        ? '<button class="lvl-btn" style="font-size:14px;padding:9px 18px" id="cd-lvlup">⭐' + levelCost(lv) + ' 레벨업</button>' +
+      (lv < MAX_LV
+        ? '<button class="lvl-btn" style="font-size:14px;padding:9px 18px" id="cd-lvlup">⭐' + levelCost(lv, id) + ' 레벨업</button>' +
           ((saveData.lvCards || 0) > 0
-            ? ' <button class="lvl-btn" style="font-size:14px;padding:9px 14px" id="cd-cardup">📜 카드 사용 (' + saveData.lvCards + ')</button>'
+            ? ' <button class="lvl-btn" style="font-size:14px;padding:9px 14px" id="cd-cardup">📜 카드 ' + cardCost(lv, id) + '장 (보유 ' + saveData.lvCards + ')</button>'
             : '')
         : '');
     $('cd-equip-btn').onclick = () => openItemPicker(id);
     // 📜 레벨업 카드 사용 (영화관 보상)
     const cardBtn = $('cd-cardup');
     if (cardBtn) cardBtn.onclick = () => {
-      if ((saveData.lvCards || 0) <= 0) return;
-      saveData.lvCards--;
+      const need = cardCost(lv, id);
+      if ((saveData.lvCards || 0) < need) {
+        cardBtn.textContent = '📜 카드 부족! (' + (saveData.lvCards || 0) + '/' + need + ')';
+        return;
+      }
+      saveData.lvCards -= need;
       saveData.lv[id] = lv + 1;
       persist(); renderDex();
       openCharDetail(id);
     };
     const btn = $('cd-lvlup');
     if (btn) btn.onclick = () => {
-      const cost = levelCost(lv);
+      const cost = levelCost(lv, id);
       if ((saveData.candy || 0) < cost) {
         btn.textContent = '⭐ 별사탕 부족! (' + (saveData.candy || 0) + '/' + cost + ')';
         return;
@@ -1439,13 +1452,13 @@ function runStory(stageNo, when, onDone) {
 
 // ═══════════ 🎬 영화관 (기획: 구예준) ═══════════
 // 던전 → ⭐별사탕 → 🍿팝콘 업그레이드 → 영화 관람 → 📜레벨업카드 / 🎒도구 / 🎫티켓
-const WATCH_COST = 10;            // 관람비 (던전 1~2판이면 충분)
+const WATCH_COST = 20;            // 관람비 (던전 2판이면 충분)
 const POPCORN = [
   { name: '기본 팝콘',   icon: '🍿', up: 30,   cards: [1, 1], item: 0.08, ticket: 0 },
   { name: '카라멜 팝콘', icon: '🍯', up: 60,   cards: [1, 2], item: 0.15, ticket: 0.05 },
   { name: '치즈 팝콘',   icon: '🧀', up: 110,  cards: [2, 2], item: 0.22, ticket: 0.12 },
   { name: '초코 팝콘',   icon: '🍫', up: 180,  cards: [2, 3], item: 0.30, ticket: 0.20 },
-  { name: '황금 팝콘',   icon: '👑', up: null, cards: [3, 4], item: 0.40, ticket: 0.32 },
+  { name: '황금 팝콘',   icon: '👑', up: null, cards: [2, 3], item: 0.40, ticket: 0.32 },
 ];
 function popLv() { return Math.min(POPCORN.length, Math.max(1, saveData.popLv || 1)); }
 function popNow() { return POPCORN[popLv() - 1]; }
@@ -1709,7 +1722,7 @@ function stagePool(n) { return n <= 3 ? ['slime'] : n <= 6 ? ['slime', 'bat'] : 
 function mkHero(id, side) {
   const base = HEROES[id];
   const lv = (saveData.lv || {})[id] || 1;
-  const statMult = 1 + 0.08 * (lv - 1);           // 레벨당 +8%
+  const statMult = 1 + 0.02 * (lv - 1);           // 레벨당 +2% (만렙 100 = 약 3배)
   const attr = base.attr || '무';
   const item = (saveData.equip || {})[id] || null;
   const aMul = item === 'shovel' ? 1 : ATTRS[attr].atk;   // 🥄 삽 = 무상성 완전체
@@ -2082,7 +2095,7 @@ function showStageReward(n) {
     const ups = [];
     B.teams.A.forEach(u => {
       const cur = (saveData.lv || {})[u.id] || 1;
-      if (cur < 15) { saveData.lv[u.id] = cur + 1; ups.push(HEROES[u.id].name + ' Lv.' + (cur + 1)); }
+      if (cur < MAX_LV) { saveData.lv[u.id] = cur + 1; ups.push(HEROES[u.id].name + ' Lv.' + (cur + 1)); }
     });
     if (ups.length) lvHtml = '<br>📈 <b style="color:#7cf76a">' + ups.join(' · ') + '</b>';
   }
