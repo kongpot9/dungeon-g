@@ -76,6 +76,25 @@
   .pick-row .party-card.sel { border-color: #ffd94a; }
   #pvp-start:disabled { filter: grayscale(1) brightness(.6); }
 
+  /* ── 🐉 레이드 (기획: 구예준) ── */
+  #raid-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 6px; width: 100%; }
+  #raid-picks { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; max-width: 660px; }
+  #raid-picks .party-card { width: 66px; padding: 5px; font-size: 10px; }
+  #raid-picks .party-card img { max-width: 42px; max-height: 40px; }
+  #raid-msg { font-size: 12px; color: #ffd94a; min-height: 16px; }
+  #raid-timer {
+    display: none; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 46;
+    padding: 4px 14px; border-radius: 10px; background: rgba(20,16,38,.9); border: 2px solid #ff9a6a;
+    color: #ffd94a; font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums;
+  }
+  .raid-mode #raid-timer { display: block; }
+  .raid-mode #dungeon-name { top: 30px; }
+  #boss-hp-wrap { display: none; position: absolute; top: 54px; left: 12%; right: 12%; z-index: 46; }
+  .raid-mode #boss-hp-wrap { display: block; }
+  #boss-hp-bar { height: 14px; background: #1a1428; border: 2px solid #7e1a0a; border-radius: 9px; overflow: hidden; }
+  #boss-hp-fill { height: 100%; width: 100%; background: linear-gradient(90deg,#d63920,#ff9a6a); transition: width .25s; }
+  #boss-hp-text { text-align: center; color: #ffb9a0; font-size: 11px; font-weight: 800; margin-top: 2px; text-shadow: 0 1px 3px #000; }
+
   /* ── 📖 스토리 (대본: 구예준) ── */
   #story-screen {
     position: absolute; inset: 0; z-index: 98; display: none; cursor: pointer;
@@ -515,11 +534,12 @@
     <div id="game-logo">던전<span class="g">G</span></div>
     <div id="title-sub">G의 정체는... 비밀이다</div>
     <button id="start-btn">모험 시작</button>
-    <div style="display:flex; gap:10px;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
       <button class="menu-btn" id="gacha-open">🎰 뽑기</button>
       <button class="menu-btn" id="dex-open">📖 캐릭터</button>
       <button class="menu-btn" id="pvp-open">⚔️ 대결</button>
       <button class="menu-btn" id="movie-open">🎬 영화관</button>
+      <button class="menu-btn" id="raid-open">🐉 레이드</button>
     </div>
     <div class="ticket-chip ticket-view"></div>
     <div id="title-studio">구예준 스튜디오</div>
@@ -578,8 +598,13 @@
       <div id="rain-layer"></div>
       <div id="rain-badge">🌧️ 비! 상대 공격력 25%↓</div>
       <div id="stage-units"></div>
+      <div id="boss-hp-wrap">
+        <div id="boss-hp-bar"><div id="boss-hp-fill"></div></div>
+        <div id="boss-hp-text"></div>
+      </div>
     </div>
     <button id="flee-btn">🏃 도망</button>
+    <div id="raid-timer">⏱️ 0.0초</div>
     <div id="stage-result">
       <div id="result-box">
         <img id="result-chest" alt="">
@@ -661,6 +686,21 @@
       <button id="watch-btn">🎬 영화 보기 (⭐10)</button>
       <div id="movie-msg"></div>
       <div id="card-info"></div>
+    </div>
+  </div>
+
+  <!-- 🐉 레이드 (기획: 구예준) -->
+  <div id="raid-screen" class="sub-screen">
+    <div class="sub-head">
+      <button class="back-btn">← 뒤로</button>
+      <div class="sub-title">🐉 레이드 — 보스형님</div>
+      <div class="ticket-chip" id="raid-best">최고 기록 —</div>
+    </div>
+    <div id="raid-body">
+      <div style="font-size:12px;color:#9c92c4">친구 1~3명이 팀먹고 최대 9명으로 다구리! 클리어 타임을 재는 스피드런</div>
+      <div id="raid-picks"></div>
+      <div id="raid-msg"></div>
+      <button id="raid-start" class="stage-btn" style="width:auto;padding:12px 36px" disabled>레이드 시작!</button>
     </div>
   </div>
 
@@ -802,6 +842,7 @@ loadArt('priest', 'character/priest');   // 첫사랑성직자 (뽑기·도감)
 loadArt('josun', 'character/josun');       // 조슨대왕 — 신하 소환 어태커
 loadArt('wolf', 'character/wolf');         // 백울프 — 확률 스턴
 loadArt('watergirl', 'character/watergirl'); // 물소소녀 — 물꽃·박치기·비
+loadArt('raidboss', 'character/raidboss');   // 🐉 레이드 보스형님 (그리면 자동 교체)
 // 🍿 팝콘 그림 (그리면 자동 교체, 없으면 이모지)
 [1, 2, 3, 4, 5].forEach(i => loadArt('popcorn' + i, 'character/popcorn' + i));
 // 도구 8종 (예준 그림)
@@ -1798,8 +1839,10 @@ function renderField() {
   $('stage-units').innerHTML = '';
   ['A', 'B'].forEach(side => {
     B.teams[side].forEach((u, i) => {
-      const slot = (side === 'A' ? SLOT_A : SLOT_B)[i] || {};
-      const h = u.kind === 'hero' ? 76 : (u.size || 58);
+      // 레이드는 아군이 최대 9명이라 3×3 격자 배치
+      const isRaidTeam = B.kind === 'raid' && side === 'A';
+      const slot = isRaidTeam ? (RAID_SLOTS[i] || {}) : (side === 'A' ? SLOT_A : SLOT_B)[i] || {};
+      const h = u.kind === 'hero' ? (isRaidTeam ? 54 : 76) : (u.size || 58);
       const el = document.createElement('div');
       el.className = 's-fighter ' + (side === 'A' ? 'p1' : 'p2');
       el.innerHTML =
@@ -1866,9 +1909,11 @@ function unitAct(u) {
   // 스킬 게이지가 다 찼으면 자동 발동
   if (u.kind === 'hero' && u.hasGauge && u.gauge >= 100 && Date.now() >= u.buffUntil) return fireSkill(u);
 
-  const target = foes[0];
+  const target = u.raid ? foes[Math.floor(Math.random() * foes.length)] : foes[0];  // 보스형님은 랜덤 타겟
   const isWater = u.id === 'watergirl';
-  const headbutt = isWater && Math.random() < 0.2;                // 🐃 20% 박치기
+  // 🐉 보스형님 광역기: 25% 확률로 전원 강타 (9명 다구리 대응)
+  const bossSmash = u.raid && Math.random() < 0.25;
+  const headbutt = (isWater && Math.random() < 0.2) || bossSmash; // 🐃 20% 박치기 / 보스 광역
   u.el.classList.add(headbutt ? 'charge' : (u.side === 'A' ? 'lunge' : 'elunge'));
   setTimeout(() => u.el.classList.remove('lunge', 'elunge', 'charge'), 280);
   if (u.kind === 'hero') { if (isWater) dropWaterFlower(target.el); else dropBolt(target.el); }
@@ -1881,7 +1926,7 @@ function unitAct(u) {
   u.hitCount++;
 
   if (headbutt) {
-    popDmg(u.el, '🐃 박치기!!', 'ult');
+    popDmg(u.el, bossSmash ? '🐉 광역 강타!!' : '🐃 박치기!!', 'ult');
     foes.forEach((f, i) => {
       f.el.classList.add('blown');
       setTimeout(() => f.el.classList.remove('blown'), 500);
@@ -1947,6 +1992,13 @@ function fireSkill(u) {
 function battleTick() {
   if (!B || B.over) return;
   const now = Date.now();
+  // ⏱️ 레이드 스피드런 타이머 — 배속을 곱해서 재므로 x3으로 돌려도 기록이 유리해지지 않음
+  if (B.kind === 'raid' && !B.paused) {
+    B.battleTime += 0.2 * B.speed;
+    $('raid-timer').textContent = '⏱️ ' + fmtTime(B.battleTime);
+    updateBossHp();
+    if (B.battleTime >= RAID_TIME_LIMIT) return raidEnd(false);
+  }
   // 비 종료
   if (!(now < B.rainOn.A || now < B.rainOn.B)) showRain(false);
   // 변신 종료
@@ -1999,9 +2051,13 @@ function checkEnd() {
   if (!B || B.over) return;
   const aAlive = B.teams.A.some(u => u.hp > 0);
   const bAlive = B.teams.B.some(u => u.hp > 0);
-  if (!aAlive) { B.over = true; stopLoop(); setTimeout(() => (B.kind === 'stage' ? stageLose() : pvpEnd('B')), 700); }
+  if (!aAlive) {
+    B.over = true; stopLoop();
+    setTimeout(() => (B.kind === 'raid' ? raidEnd(false) : B.kind === 'stage' ? stageLose() : pvpEnd('B')), 700);
+  }
   else if (!bAlive) {
-    if (B.kind === 'pvp') { B.over = true; stopLoop(); setTimeout(() => pvpEnd('A'), 700); }
+    if (B.kind === 'raid') { B.over = true; stopLoop(); setTimeout(() => raidEnd(true), 700); }
+    else if (B.kind === 'pvp') { B.over = true; stopLoop(); setTimeout(() => pvpEnd('A'), 700); }
     else if (B.seg >= B.segTotal) { B.over = true; stopLoop(); setTimeout(stageWin, 700); }
     else setTimeout(nextSegment, 800);
   }
@@ -2133,7 +2189,9 @@ function stageLose() {
 function exitBattle() {
   stopLoop();
   const wasPvp = B && B.kind === 'pvp';
+  const wasRaid = B && B.kind === 'raid';
   mode = 'menu'; busy = false; B = null;
+  $('battle-screen').classList.remove('raid-mode');
   $('stage-result').classList.remove('on');
   $('battle-screen').classList.remove('on', 'stage-mode');
   $('stage-units').innerHTML = '';
@@ -2141,10 +2199,11 @@ function exitBattle() {
   $('gauge-wrap').classList.remove('on', 'full', 'trans');
   showRain(false);
   $('title-screen').style.display = '';
-  if (wasPvp) { renderPvpSetup(); $('pvp-screen').classList.add('on'); }
+  if (wasRaid) { renderRaidSetup(); $('raid-screen').classList.add('on'); }
+  else if (wasPvp) { renderPvpSetup(); $('pvp-screen').classList.add('on'); }
   else { renderStages(); $('stage-screen').classList.add('on'); }
 }
-$('flee-btn').onclick = () => { if (mode === 'stage' || mode === 'pvp') exitBattle(); };
+$('flee-btn').onclick = () => { if (mode === 'stage' || mode === 'pvp' || mode === 'raid') exitBattle(); };
 
 // ═══════════ 1대1 대결 — 3v3 덱 자동 전투 (기획: 구예준) ═══════════
 const pvpDeck = { 1: [], 2: [] };
@@ -2194,6 +2253,108 @@ function pvpEnd(winSide) {
   $('pvp-exit').onclick = exitBattle;
   $('stage-result').classList.add('on');
 }
+// ═══════════ 🐉 레이드 — 최대 9명 다구리 스피드런 (기획: 구예준) ═══════════
+const RAID_MAX = 9;                 // 1~3명이 팀먹고 3명씩 = 최대 9명
+const RAID_TIME_LIMIT = 180;        // 제한시간 (배틀 시간 기준)
+const RAID_SLOTS = [
+  { left: '2%',  bottom: '50%' }, { left: '12%', bottom: '50%' }, { left: '22%', bottom: '50%' },
+  { left: '2%',  bottom: '30%' }, { left: '12%', bottom: '30%' }, { left: '22%', bottom: '30%' },
+  { left: '2%',  bottom: '10%' }, { left: '12%', bottom: '10%' }, { left: '22%', bottom: '10%' },
+];
+let raidTeam = [];
+
+function fmtTime(sec) { return sec.toFixed(1) + '초'; }
+function renderRaidSetup() {
+  raidTeam = raidTeam.filter(id => saveData.coll[id]).slice(0, RAID_MAX);
+  const owned = ownedHeroes();
+  $('raid-picks').innerHTML = owned.length ? owned.map(id => {
+    const n = raidTeam.indexOf(id);
+    return '<div class="party-card' + (n >= 0 ? ' sel' : '') + '" data-id="' + id + '">' +
+      (n >= 0 ? '<div class="deck-no">' + (n + 1) + '</div>' : '') +
+      (ART[heroKey(id)] ? '<img src="' + ART[heroKey(id)] + '" alt="">' : '') +
+      '<div>' + ATTRS[HEROES[id].attr || '무'].icon + HEROES[id].name + '</div>' +
+      '<div style="color:#7cf76a;font-size:10px">Lv.' + ((saveData.lv || {})[id] || 1) + '</div></div>';
+  }).join('') : '<div style="color:#9c92c4;font-size:12px">캐릭터가 없어! 🎰 뽑기 먼저!</div>';
+  $('raid-picks').querySelectorAll('.party-card').forEach(c => c.onclick = () => {
+    const id = c.dataset.id;
+    if (raidTeam.includes(id)) raidTeam = raidTeam.filter(x => x !== id);
+    else if (raidTeam.length >= RAID_MAX) { $('raid-msg').textContent = '최대 ' + RAID_MAX + '명까지!'; return; }
+    else raidTeam.push(id);
+    $('raid-msg').textContent = raidTeam.length + '명 출전 (레이드는 전설 제한 없음!)';
+    renderRaidSetup();
+  });
+  const best = saveData.raidBest;
+  $('raid-best').textContent = best ? '🏆 최고 ' + fmtTime(best) : '최고 기록 —';
+  $('raid-start').disabled = raidTeam.length === 0;
+}
+function startRaid() {
+  mode = 'raid';
+  B = mkBattle('raid');
+  B.battleTime = 0;
+  B.teams.A = raidTeam.map(id => mkHero(id, 'A'));
+  // 보스형님: 체력은 출전 인원에 비례 (혼자 가도, 9명이 가도 도전할 맛)
+  const boss = mkMon('king', 'B', 1, 1);
+  boss.name = '보스형님';
+  boss.art = ART.raidboss || ART.king || null;
+  boss.size = 170;
+  boss.maxHp = boss.hp = 6000 + 4000 * B.teams.A.length;
+  boss.atk = 70;
+  boss.raid = true;
+  B.teams.B = [boss];
+  $('raid-screen').classList.remove('on');
+  $('title-screen').style.display = 'none';
+  $('battle-screen').classList.add('on', 'stage-mode', 'raid-mode');
+  $('stage-result').classList.remove('on');
+  showRain(false);
+  setAutoControls(true);
+  renderField();
+  const now = Date.now();
+  B.teams.A.concat(B.teams.B).forEach((u, i) => { u.nextAt = now + 600 + (i % 3) * 120; });
+  $('dungeon-name').textContent = '🐉 보스형님 레이드 — ' + B.teams.A.length + '명 출전!';
+  updateBossHp();
+  startLoop();
+}
+function updateBossHp() {
+  const b = B && B.teams.B[0];
+  if (!b) return;
+  const pct = Math.max(0, b.hp / b.maxHp * 100);
+  $('boss-hp-fill').style.width = pct + '%';
+  $('boss-hp-text').textContent = '🐉 보스형님  ' + Math.max(0, Math.round(b.hp)).toLocaleString() + ' / ' + b.maxHp.toLocaleString();
+}
+function raidEnd(cleared) {
+  B.over = true; stopLoop();
+  const t = B.battleTime;
+  $('result-chest').style.display = 'none';
+  if (cleared) {
+    const best = saveData.raidBest;
+    const isNew = !best || t < best;
+    if (isNew) saveData.raidBest = t;
+    // 기록이 빠를수록 보상 UP
+    const grade = t <= 45 ? 3 : t <= 90 ? 2 : 1;
+    const candy = 30 * grade, tickets = grade;
+    saveData.candy = (saveData.candy || 0) + candy;
+    saveData.spTickets = (saveData.spTickets || 0) + tickets;
+    persist();
+    if (ART.chest) { $('result-chest').src = ART.chest; $('result-chest').style.display = 'block'; }
+    $('result-title').textContent = '🐉 보스형님 격파!! ⏱️ ' + fmtTime(t);
+    $('result-rewards').innerHTML =
+      (isNew ? '<b style="color:#7cf76a">🏆 신기록!!</b><br>' : '🏆 최고 기록: ' + fmtTime(best) + '<br>') +
+      '평가: ' + (grade === 3 ? '⭐⭐⭐ 스피드런 마스터' : grade === 2 ? '⭐⭐ 훌륭함' : '⭐ 클리어') +
+      '<br>⭐ 별사탕 +' + candy + '<br>🎫 스페셜 티켓 +' + tickets;
+  } else {
+    $('result-title').textContent = '💀 보스형님한테 발림...';
+    $('result-rewards').textContent = t >= RAID_TIME_LIMIT ? '제한시간 초과! 더 센 덱이 필요해' : '전멸! 레벨을 올리거나 조합을 바꿔보자';
+  }
+  $('result-actions').innerHTML =
+    '<button class="result-action" id="raid-retry">다시 도전</button>' +
+    '<button class="result-action" id="raid-exit">나가기</button>';
+  $('raid-retry').onclick = () => { $('stage-result').classList.remove('on'); startRaid(); };
+  $('raid-exit').onclick = exitBattle;
+  $('stage-result').classList.add('on');
+}
+$('raid-open').onclick = () => { renderRaidSetup(); $('raid-msg').textContent = ''; $('raid-screen').classList.add('on'); };
+$('raid-start').onclick = () => { if (raidTeam.length) startRaid(); };
+
 $('pvp-open').onclick = () => { renderPvpSetup(); $('pvp-screen').classList.add('on'); };
 $('pvp-start').onclick = () => { if (pvpDeck[1].length && pvpDeck[2].length) startPvp(); };
 
