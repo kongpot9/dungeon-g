@@ -88,6 +88,10 @@
   .pick-row .party-card.sel { border-color: #ffd94a; }
   #pvp-start:disabled { filter: grayscale(1) brightness(.6); }
 
+  /* 🔊 소리 토글 */
+  #sfx-btn { margin-top: 4px; padding: 4px 12px; font-size: 11px; font-weight: 800; color: #9c92c4; background: #1a142e; border: 2px solid #5a4d8a; border-radius: 9px; cursor: pointer; }
+  #sfx-btn.off { color: #6c6394; }
+
   /* ── ⚔️ 전투력 (기획: 구예준) ── */
   #cp-btn {
     padding: 7px 18px; font-size: 14px; font-weight: 900; color: #2b1c05;
@@ -585,6 +589,7 @@
       <button class="menu-btn" id="raid-open">🐉 레이드</button>
     </div>
     <div class="ticket-chip ticket-view"></div>
+    <button id="sfx-btn">🔊 소리 켜짐</button>
     <div id="title-studio">구예준 스튜디오</div>
   </div>
 
@@ -856,6 +861,78 @@
 const $ = id => document.getElementById(id);
 let busy = false;
 let mode = 'tutorial'; // 'tutorial' | 'stage'
+
+// ═══════════ 🎵 효과음 (예준 결정: BGM 없이 효과음만, 코드로 합성) ═══════════
+// 소리 파일 0개 — 브라우저가 직접 소리를 만들어서 용량도 0, 인터넷 없어도 남
+const SFX = (() => {
+  let ctx = null, last = 0, on = true;
+  function ac() {
+    if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; ctx = new AC(); }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  function env(node, g, dur, t0) {
+    const c = ac(); if (!c) return;
+    node.gain.setValueAtTime(0.0001, t0);
+    node.gain.exponentialRampToValueAtTime(g, t0 + 0.008);
+    node.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  }
+  // 삑 소리 하나 (freq: 음높이, dur: 길이)
+  function tone(freq, dur, type, gain, delay, freqTo) {
+    const c = ac(); if (!c || !on) return;
+    const t0 = c.currentTime + (delay || 0);
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(freq, t0);
+    if (freqTo) o.frequency.exponentialRampToValueAtTime(freqTo, t0 + dur);
+    env(g, gain || 0.12, dur, t0);
+    o.connect(g); g.connect(c.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  // 치익 소리 (타격감용 노이즈)
+  function noise(dur, gain, cut, delay) {
+    const c = ac(); if (!c || !on) return;
+    const t0 = c.currentTime + (delay || 0);
+    const len = Math.max(1, Math.floor(c.sampleRate * dur));
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource(); src.buffer = buf;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cut || 1200;
+    const g = c.createGain(); env(g, gain || 0.15, dur, t0);
+    src.connect(f); f.connect(g); g.connect(c.destination);
+    src.start(t0);
+  }
+  // 너무 잦은 소리 막기 (자동전투 x3에서 소리 폭탄 방지)
+  function throttled(fn, ms) {
+    return (...a) => { const n = Date.now(); if (n - last < (ms || 70)) return; last = n; fn(...a); };
+  }
+  return {
+    setOn(v) { on = v; if (v) ac(); },
+    isOn() { return on; },
+    unlock() { ac(); },
+    click() { tone(760, 0.05, 'square', 0.06); },
+    hit: throttled(() => { noise(0.07, 0.1, 900); tone(140, 0.09, 'sine', 0.13, 0, 70); }, 60),
+    crit: throttled(() => { noise(0.11, 0.16, 1600); tone(90, 0.16, 'sine', 0.2, 0, 45); tone(520, 0.1, 'square', 0.08, 0.02); }, 60),
+    hurt: throttled(() => { tone(220, 0.1, 'sawtooth', 0.07, 0, 110); }, 80),
+    tick() { noise(0.03, 0.07, 2600); },                    // 뽑기 두구두구
+    legend() {                                              // ⭐ 전설 팡파레
+      [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 'triangle', 0.16, i * 0.11));
+      tone(1568, 0.5, 'triangle', 0.12, 0.46);
+    },
+    transform() {                                           // 🐉 변신 스윕
+      tone(200, 0.55, 'sawtooth', 0.14, 0, 950);
+      noise(0.4, 0.12, 2200, 0.05);
+      tone(880, 0.3, 'triangle', 0.1, 0.42);
+    },
+    win() { [523, 659, 784].forEach((f, i) => tone(f, 0.18, 'triangle', 0.14, i * 0.1)); tone(1047, 0.35, 'triangle', 0.13, 0.3); },
+    lose() { [392, 330, 262].forEach((f, i) => tone(f, 0.26, 'sawtooth', 0.11, i * 0.16)); },
+    reward() { tone(1047, 0.09, 'triangle', 0.11); tone(1319, 0.12, 'triangle', 0.11, 0.08); },
+    stun: throttled(() => { tone(300, 0.14, 'square', 0.09, 0, 900); }, 100),
+  };
+})();
+// 저장된 설정 반영 + 첫 터치에 오디오 잠금 해제 (브라우저 정책)
+document.addEventListener('pointerdown', () => SFX.unlock(), { once: true });
 
 // ── 예준 그림 자동 로더 ──
 // character/, skill/ 폴더에 정해진 이름의 파일이 있으면 임시 그림 대신 사용
@@ -1302,9 +1379,12 @@ function doPullResult(pick, isSpecial) {
   circle.textContent = '✨';
   circle.classList.add('rumble');
   const legendary = pick.rank === '전설';
+  // 🎰 두구두구 (결과 공개 때 같이 멈춤 — 타이머가 따로 놀지 않게)
+  const rumbleTimer = setInterval(() => SFX.tick(), 110);
   if (legendary) setTimeout(() => circle.classList.add('legendary'), 1200); // 전설은 뜸들이다 폭주
 
   setTimeout(() => {
+    clearInterval(rumbleTimer);
     circle.classList.remove('rumble', 'legendary');
     circle.textContent = '🎁';
     const isNew = !saveData.coll[pick.id];
@@ -1329,6 +1409,7 @@ function doPullResult(pick, isSpecial) {
       '<div style="font-size:12px">' + subText + '</div>';
     $('gacha-result').classList.add('on');
     $('gacha-stage').classList.add('showing-result');
+    if (legendary) SFX.legend(); else SFX.reward();
     if (legendary) $('gacha-msg').textContent = '"...다시 만났군." — 드래베오';
     else if (isSpecial) $('gacha-msg').textContent = '🎫 스페셜 뽑기 — 영웅 이상 확정!';
     pulling = false;
@@ -1649,6 +1730,9 @@ $('gacha-open').onclick = () => {
 $('dex-open').onclick = () => { renderDex(); refreshTickets(); refreshSp(); $('dex-screen').classList.add('on'); };
 document.querySelectorAll('.back-btn').forEach(b => b.onclick = () => b.closest('.sub-screen').classList.remove('on'));
 refreshTickets();
+// 🔊 저장된 소리 설정 복원 (기본: 켜짐)
+if (saveData.sfx === false) SFX.setOn(false);
+refreshSfxBtn();
 
 // ═══════════ 스테이지 시스템 — 제1지역 즈은하시티 1-1~1-10 (기획: 구예준) ═══════════
 // 한 스테이지 = 길(세그먼트) 3~5개 반복 + 1-10은 슬라임킹 보스전
@@ -1806,6 +1890,24 @@ function openCP(list, title) {
 $('cp-close').onclick = () => $('cp-panel').classList.remove('on');
 $('cp-panel').onclick = e => { if (e.target.id === 'cp-panel') $('cp-panel').classList.remove('on'); };
 $('cp-btn').onclick = () => openCP(myDeck(), '덱');
+
+// 🔊 소리 켜기/끄기 (설정 저장됨)
+function refreshSfxBtn() {
+  const on = SFX.isOn();
+  $('sfx-btn').textContent = on ? '🔊 소리 켜짐' : '🔇 소리 꺼짐';
+  $('sfx-btn').classList.toggle('off', !on);
+}
+$('sfx-btn').onclick = () => {
+  const next = !SFX.isOn();
+  SFX.setOn(next);
+  saveData.sfx = next; persist();
+  refreshSfxBtn();
+  if (next) SFX.click();
+};
+// 모든 버튼에 클릭음 (소리 꺼져 있으면 안 남)
+document.addEventListener('click', e => {
+  if (e.target.closest('button, .party-card, .dex-card, .ip-card, .stage-btn, .region-tab')) SFX.click();
+}, true);
 
 // ── 스테이지 선택 화면 ──
 function renderStages() {
@@ -2027,6 +2129,7 @@ function applyHit(A, D, dmg, cls) {
   if (dd.negateMsg) { popDmg(D.el, dd.negateMsg, 'tickle'); return; }
   D.hp -= dd.dmg;
   setUnitBar(D);
+  if (cls === 'ult') SFX.crit(); else if (cls === 'heropain') SFX.hurt(); else SFX.hit();
   popDmg(D.el, dd.dmg, cls);
   D.el.classList.add('hurt');
   $('arena').classList.add('shake');
@@ -2096,7 +2199,7 @@ function unitAct(u) {
   }
   // 🐺 백울프: 25% 스턴
   if (u.id === 'wolf' && target.hp > 0 && Math.random() < 0.25) {
-    target.stunned = true; target.el.classList.add('stunned');
+    target.stunned = true; target.el.classList.add('stunned'); SFX.stun();
   }
   // 🦇 박쥐 흡수: 아군 공격력을 조금씩 빼앗음 (2지역부터, 예준 기획)
   if (u.kind === 'mon' && u.drain && target.hp > 0 && target.atk > 10) {
@@ -2116,6 +2219,7 @@ function unitAct(u) {
 
 function fireSkill(u) {
   u.gauge = 0;
+  SFX.transform();
   $('flash').classList.add('on');
   spawnUltBurst();
   setTimeout(() => $('flash').classList.remove('on'), 600);
@@ -2317,6 +2421,7 @@ function showStageReward(rid, n) {
   }
   persist();
   if (ART.chest) { $('result-chest').src = ART.chest; $('result-chest').style.display = 'block'; }
+  SFX.win();
   $('result-title').textContent = '🎉 ' + rid + '-' + n + ' 클리어!' +
     (n === R.stages ? ' 🏆 ' + R.name + ' 정복!' : '');
   $('result-rewards').innerHTML = '⭐ 별사탕 +' + candy + '<br>🎟️ 뽑기권 +' + tickets + (first ? ' (첫 클리어!)' : '') + lvHtml + dropHtml;
@@ -2327,6 +2432,7 @@ function showStageReward(rid, n) {
 function stageLose() {
   const rid = B.region, n = B.stage;
   $('result-chest').style.display = 'none';
+  SFX.lose();
   $('result-title').textContent = '💀 덱 전멸...';
   $('result-rewards').textContent = '즈은하시티는 만만하지 않다! 덱을 바꾸거나 레벨을 올려보자.';
   $('result-actions').innerHTML =
@@ -2394,6 +2500,7 @@ function startPvp() {
 function pvpEnd(winSide) {
   const winner = winSide === 'A' ? '🔵 1P' : '🔴 2P';
   $('result-chest').style.display = 'none';
+  SFX.win();
   $('result-title').textContent = winner + ' 승리!! 🏆';
   $('result-rewards').textContent = '친선전이라 보상은 우정입니다.';
   $('result-actions').innerHTML =
@@ -2487,12 +2594,14 @@ function raidEnd(cleared) {
     saveData.spTickets = (saveData.spTickets || 0) + tickets;
     persist();
     if (ART.chest) { $('result-chest').src = ART.chest; $('result-chest').style.display = 'block'; }
+    SFX.win();
     $('result-title').textContent = '🐉 보스형님 격파!! ⏱️ ' + fmtTime(t);
     $('result-rewards').innerHTML =
       (isNew ? '<b style="color:#7cf76a">🏆 신기록!!</b><br>' : '🏆 최고 기록: ' + fmtTime(best) + '<br>') +
       '평가: ' + (grade === 3 ? '⭐⭐⭐ 스피드런 마스터' : grade === 2 ? '⭐⭐ 훌륭함' : '⭐ 클리어') +
       '<br>⭐ 별사탕 +' + candy + '<br>🎫 스페셜 티켓 +' + tickets;
   } else {
+    SFX.lose();
     $('result-title').textContent = '💀 보스형님한테 발림...';
     $('result-rewards').textContent = t >= RAID_TIME_LIMIT ? '제한시간 초과! 더 센 덱이 필요해' : '전멸! 레벨을 올리거나 조합을 바꿔보자';
   }
