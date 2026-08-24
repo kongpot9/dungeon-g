@@ -279,9 +279,11 @@
     height: 100%; max-width: 100%;
     background-size: 100% 100%; background-repeat: no-repeat;
   }
+  /* 투명 버튼 — 예전 버튼 스타일(그림자 막대·울렁이는 애니메이션)을 전부 끈다 */
   #menu-canvas .hot {
-    position: absolute; padding: 0; border: none; background: transparent;
-    cursor: pointer; border-radius: 12px;
+    position: absolute; padding: 0; border: none; background: none;
+    box-shadow: none !important; animation: none !important; filter: none;
+    cursor: pointer; border-radius: 12px; font-size: 0; color: transparent;
     -webkit-tap-highlight-color: transparent;
   }
   /* 눌리는 느낌 (그림을 가리지 않게 살짝만) */
