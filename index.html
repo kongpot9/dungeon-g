@@ -284,14 +284,10 @@
     cursor: pointer; border-radius: 12px;
     -webkit-tap-highlight-color: transparent;
   }
-  /* 눌리는 느낌만 살짝 */
-  #menu-canvas .hot:active { transform: scale(.94); background: rgba(255,255,255,.18); }
-  /* 그림 위에 얹히는 글자들 — 그림의 빈 위쪽 공간에 */
-  #menu-canvas #game-logo { position: absolute; left: 0; right: 0; top: 6%; text-align: center; }
-  #menu-canvas #title-sub { position: absolute; left: 0; right: 0; top: 30%; text-align: center; }
+  /* 눌리는 느낌 (그림을 가리지 않게 살짝만) */
+  #menu-canvas .hot:active { transform: scale(.93); }
   #menu-canvas .ticket-chip { position: absolute; right: 3%; top: 4%; }
   #menu-canvas #sfx-btn { position: absolute; left: 3%; top: 4%; margin: 0; }
-  #menu-canvas #title-studio { position: absolute; left: 0; right: 0; bottom: 1%; text-align: center; }
   /* 예준 그림이 밝은 색이라, 그림이 깔리면 어두운 던전 배경·횃불은 감춘다 */
   #title-screen.has-bg { background: #e9e9ec; padding: 0; }
   #title-screen.has-bg .torch { display: none; }
@@ -606,16 +602,14 @@
     <div class="torch" style="top:16%; right:16%; animation-delay:.4s">🔥</div>
     <!-- 메인 화면 = 예준이 그린 그림 그대로. 그림 위 아이콘 자리에 투명 버튼을 얹음 -->
     <div id="menu-canvas">
-      <div id="game-logo">던전<span class="g">G</span></div>
-      <div id="title-sub">G의 정체는... 비밀이다</div>
       <div class="ticket-chip ticket-view"></div>
-      <button class="hot" id="raid-open"  style="left:5.5%;  top:60%; width:18%;  height:39%"></button>
-      <button class="hot" id="movie-open" style="left:22.7%; top:64%; width:13.3%; height:35%"></button>
-      <button class="hot" id="start-btn"  style="left:35%;   top:62.8%; width:23.3%; height:15%"></button>
-      <button class="hot" id="dex-open"   style="left:68.5%; top:57%; width:17.5%; height:42%"></button>
-      <button class="hot" id="gacha-open" style="left:86%;   top:56%; width:13.5%; height:43%"></button>
+      <!-- 투명 버튼 위치는 그림에서 직접 측정한 값 -->
+      <button class="hot" id="raid-open"  style="left:6%;    top:72%;   width:17%;   height:26%"></button>
+      <button class="hot" id="movie-open" style="left:23%;   top:76%;   width:13%;   height:22%"></button>
+      <button class="hot" id="start-btn"  style="left:35.5%; top:64.5%; width:22%;   height:12.5%"></button>
+      <button class="hot" id="dex-open"   style="left:68.5%; top:70%;   width:17.5%; height:28%"></button>
+      <button class="hot" id="gacha-open" style="left:86%;   top:70%;   width:13.5%; height:28%"></button>
       <button id="sfx-btn">🔊 소리 켜짐</button>
-      <div id="title-studio">구예준 스튜디오</div>
     </div>
   </div>
 
