@@ -64,7 +64,12 @@
   .region-tab.sel { color: #2b1c05; background: linear-gradient(180deg,#ffe9a0,#f0a93a); border-color: #ffd94a; }
   .region-tab.locked { filter: grayscale(1) brightness(.55); cursor: default; }
 
-  #stage-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 6px 16px; max-width: 660px; overflow-y: auto; }
+  /* flex 자식은 min-height:0 이 없으면 스크롤이 안 잡힘 + align-content로 위에서부터 쌓기 */
+  #stage-grid {
+    flex: 1; min-height: 0; overflow-y: auto; touch-action: pan-y;
+    display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; justify-content: center;
+    padding: 6px 16px; max-width: 660px; width: 100%;
+  }
   #stage-grid .stage-btn { width: 68px; padding: 8px 0; font-size: 14px; }
   .stage-btn {
     width: 76px; padding: 10px 0; font-size: 15px; font-weight: 900; color: #2b1c05; cursor: pointer;
@@ -490,7 +495,17 @@
   #pull-btn:disabled { filter: grayscale(.8) brightness(.6); }
   #rate-info { color: #6c6394; font-size: 11px; padding-bottom: 8px; }
 
-  /* 낮은 화면(폰 가로)에서 뽑기 화면 컴팩트하게 — 뽑기 버튼이 항상 보이게 (제보: 구예준) */
+  /* 낮은 화면(폰 가로)에서 스테이지 화면 압축 — 아래 스테이지까지 스크롤되게 (제보: 구예준) */
+  @media (max-height: 430px) {
+    #party-row { flex-wrap: nowrap; overflow-x: auto; touch-action: pan-x; padding: 2px 8px; gap: 6px; justify-content: flex-start; }
+    #party-row .party-card { width: 56px; padding: 4px; font-size: 9px; flex-shrink: 0; }
+    #party-row .party-card img { max-width: 34px; max-height: 32px; }
+    #cp-btn { padding: 4px 12px; font-size: 12px; }
+    .region-tab { padding: 4px 10px; font-size: 11px; }
+    #stage-grid { padding: 4px 10px; gap: 6px; }
+    #stage-grid .stage-btn { width: 60px; padding: 6px 0; font-size: 13px; }
+    #stage-msg { padding-bottom: 4px !important; }
+  }
   @media (max-height: 430px) {
     #pickup-banner { padding: 5px 10px; gap: 8px; }
     #pickup-img { height: 36px; }
@@ -502,7 +517,8 @@
     #rate-info { padding-bottom: 4px; font-size: 10px; }
   }
 
-  #dex-grid { flex: 1; display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 10px; }
+  /* 캐릭터가 늘어나도 스크롤되게 (스테이지 화면과 동일한 수정) */
+  #dex-grid { flex: 1; min-height: 0; overflow-y: auto; touch-action: pan-y; display: flex; gap: 14px; align-content: flex-start; justify-content: center; flex-wrap: wrap; padding: 10px; }
   .dex-card { width: 142px; padding: 12px; border-radius: 14px; background: #1a142e; border: 3px solid #5a4d8a; text-align: center; color: #e8e2ff; }
   .dex-card.locked { filter: grayscale(1) brightness(.55); }
   .dex-card img { max-width: 100px; max-height: 88px; }
