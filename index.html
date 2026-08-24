@@ -58,7 +58,14 @@
   }
   .party-card img { max-width: 54px; max-height: 48px; }
   .party-card.sel { border-color: #ffd94a; box-shadow: 0 0 14px rgba(255,217,74,.5); }
-  #stage-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; padding: 8px 20px; max-width: 640px; }
+  /* 🗺️ 지역 탭 */
+  #region-tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 2px 0; }
+  .region-tab { padding: 6px 16px; font-size: 13px; font-weight: 900; color: #b9aee0; background: #1a142e; border: 2px solid #5a4d8a; border-radius: 10px; cursor: pointer; }
+  .region-tab.sel { color: #2b1c05; background: linear-gradient(180deg,#ffe9a0,#f0a93a); border-color: #ffd94a; }
+  .region-tab.locked { filter: grayscale(1) brightness(.55); cursor: default; }
+
+  #stage-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 6px 16px; max-width: 660px; overflow-y: auto; }
+  #stage-grid .stage-btn { width: 68px; padding: 8px 0; font-size: 14px; }
   .stage-btn {
     width: 76px; padding: 10px 0; font-size: 15px; font-weight: 900; color: #2b1c05; cursor: pointer;
     background: linear-gradient(180deg, #ffe9a0, #f0a93a); border: none; border-radius: 12px;
@@ -768,6 +775,7 @@
     </div>
     <div id="party-row"></div>
     <button id="cp-btn">⚔️ 전투력 —</button>
+    <div id="region-tabs"></div>
     <div id="stage-grid"></div>
     <div id="stage-msg" style="color:#9c92c4;font-size:12px;min-height:16px;padding-bottom:10px"></div>
   </div>
@@ -1454,7 +1462,7 @@ $('char-detail').onclick = e => { if (e.target.id === 'char-detail') $('char-det
 // │            slime, king, bat, mushroom, tree)                │
 // └───────────────────────────────────────────────────────────┘
 const STORY = {
-  1: {
+  '1-1': {
     before: [
       // ⚠️ 임시 대본 — 예준이 진짜 대본 주면 통째로 교체!
       { who: '???', text: '즈은하시티에 오신 걸 환영합니다. 여기서부턴 진짜 던전이에요.' },
@@ -1464,8 +1472,9 @@ const STORY = {
       { who: '슬라임', text: '(뿌직)', art: 'slime' },
     ],
   },
-  // 2: { before: [...], after: [...] },
-  // 10: { before: [...], after: [...] },   ← 보스전 대본도 여기에
+  // '1-10': { before: [...], after: [...] },   ← 보스전 대본
+  // '2-1':  { before: [...] },                 ← 할로우 타운 시작
+  // '2-13': { before: [...], after: [...] },   ← 할로우 타운 보스
 };
 
 let storyLines = [], storyIdx = -1, storyDone = null, storyTimer = null;
@@ -1795,19 +1804,35 @@ function renderStages() {
   $('cp-btn').textContent = '⚔️ 전투력 ' + teamCP(deck).toLocaleString();
 
   const tutDone = cleared.includes('tut');
-  let html = '<button class="stage-btn" data-stage="tut">튜토리얼' + (tutDone ? ' ⭐' : '') + '</button>';
-  for (let i = 1; i <= 10; i++) {
-    const done = cleared.includes(String(i));
-    const unlocked = tutDone && (i === 1 || cleared.includes(String(i - 1)));
-    html += '<button class="stage-btn' + (i === 10 ? ' boss' : '') + (unlocked ? '' : ' locked') + '" data-stage="' + i + '">' +
-      (unlocked ? '1-' + i + (done ? ' ⭐' : '') + (i === 10 ? ' 👑' : '') : '🔒') + '</button>';
+  // 지역 탭 (앞 지역 보스를 깨야 다음 지역 해금)
+  const curR = saveData.region || 1;
+  $('region-tabs').innerHTML = REGIONS.map(r => {
+    const prev = REGIONS.find(x => x.id === r.id - 1);
+    const open = !prev || isCleared(prev.id, prev.stages);
+    return '<button class="region-tab' + (curR === r.id ? ' sel' : '') + (open ? '' : ' locked') + '" data-r="' + r.id + '">' +
+      (open ? r.id + '지역 ' + r.name : '🔒 ???') + '</button>';
+  }).join('');
+  $('region-tabs').querySelectorAll('.region-tab').forEach(b => b.onclick = () => {
+    if (b.classList.contains('locked')) { $('stage-msg').textContent = '앞 지역의 보스를 먼저 깨야 해!'; return; }
+    saveData.region = parseInt(b.dataset.r); persist(); renderStages();
+  });
+
+  const R = regionOf(curR);
+  let html = curR === 1 ? '<button class="stage-btn" data-stage="tut">튜토리얼' + (tutDone ? ' ⭐' : '') + '</button>' : '';
+  for (let i = 1; i <= R.stages; i++) {
+    const done = isCleared(curR, i);
+    const prevOk = i === 1
+      ? (curR === 1 ? tutDone : isCleared(curR - 1, regionOf(curR - 1).stages))
+      : isCleared(curR, i - 1);
+    html += '<button class="stage-btn' + (i === R.stages ? ' boss' : '') + (prevOk ? '' : ' locked') + '" data-stage="' + i + '">' +
+      (prevOk ? curR + '-' + i + (done ? ' ⭐' : '') + (i === R.stages ? ' 👑' : '') : '🔒') + '</button>';
   }
   $('stage-grid').innerHTML = html;
   document.querySelectorAll('#stage-grid .stage-btn').forEach(b => b.onclick = () => {
     if (b.classList.contains('locked')) { $('stage-msg').textContent = '이전 스테이지를 먼저 깨야 해!'; return; }
     if (b.dataset.stage === 'tut') return startTutorial();
     if (!myDeck().length) { $('stage-msg').textContent = '덱이 비었어! 🎰 뽑기 먼저!'; return; }
-    enterStage(parseInt(b.dataset.stage));
+    enterStage(curR, parseInt(b.dataset.stage));
   });
   refreshCandy(); refreshTickets();
 }
@@ -1826,8 +1851,34 @@ const SLOT_B = [{ right: '4%', bottom: '44%' }, { right: '15%', bottom: '27%' },
 const opp = s => (s === 'A' ? 'B' : 'A');
 let B = null, battleTimer = null;
 
-function segCount(n) { return n === 10 ? 3 : n <= 3 ? 3 : n <= 6 ? 4 : 5; }
-function stagePool(n) { return n <= 3 ? ['slime'] : n <= 6 ? ['slime', 'bat'] : ['slime', 'bat', 'mushroom', 'tree']; }
+// ══════ 🗺️ 지역 (예준 기획) ══════
+const REGIONS = [
+  { id: 1, name: '즈은하시티', stages: 10, mult: 1,     reward: 1, batDrain: false },
+  { id: 2, name: '할로우 타운', stages: 13, mult: 1.175, reward: 2, batDrain: true },  // 🦇 박쥐 흡수 발동!
+];
+function regionOf(rid) { return REGIONS.find(r => r.id === rid) || REGIONS[0]; }
+function stageKey(rid, n) { return rid + '-' + n; }
+function isCleared(rid, n) { return (saveData.cleared || []).includes(stageKey(rid, n)); }
+// 예전 세이브 호환: '1'~'10' → '1-1'~'1-10'
+(function migrateCleared() {
+  const c = saveData.cleared || [];
+  let changed = false;
+  const out = c.map(k => {
+    if (/^\d+$/.test(k)) { changed = true; return '1-' + k; }
+    return k;
+  });
+  if (changed) { saveData.cleared = out; persist(); }
+})();
+
+function segCount(rid, n) {
+  const last = regionOf(rid).stages;
+  if (n === last) return 3;                        // 보스전
+  return n <= 3 ? 3 : n <= 6 ? 4 : 5;
+}
+function stagePool(rid, n) {
+  if (rid >= 2) return n <= 4 ? ['slime', 'bat'] : n <= 9 ? ['bat', 'mushroom', 'tree'] : ['bat', 'mushroom', 'tree', 'king'];
+  return n <= 3 ? ['slime'] : n <= 6 ? ['slime', 'bat'] : ['slime', 'bat', 'mushroom', 'tree'];
+}
 
 function mkHero(id, side) {
   const base = HEROES[id];
@@ -1846,13 +1897,15 @@ function mkHero(id, side) {
     hitCount: 0, stunned: false, nextAt: 0, el: null,
   };
 }
-function mkMon(type, side, hpScale, atkScale) {
+function mkMon(type, side, hpScale, atkScale, R) {
   const m = MONSTERS[type];
-  const maxHp = Math.round(m.hp * (m.boss ? 1 : hpScale));
+  const maxHp = Math.round(m.hp * hpScale);
   return {
     kind: 'mon', id: type, type, side, attr: m.attr || '무', item: null, used: {},
     name: m.name, art: ART[type] || null, size: Math.round(m.size * 0.72), boss: !!m.boss,
-    atk: Math.round(m.atk * (m.boss ? 1 : atkScale)), poison: m.poison || 0,
+    atk: Math.round(m.atk * atkScale), poison: m.poison || 0,
+    // 🦇 박쥐 공격력 흡수 — 2지역부터 발동 (예준 기획: 초보 땐 안 훔침)
+    drain: (type === 'bat' && R && R.batDrain) ? 3 : 0,
     hp: maxHp, maxHp, gauge: 0, buffMult: 1, buffUntil: 0,
     hitCount: 0, stunned: false, nextAt: 0, el: null,
   };
@@ -2029,6 +2082,12 @@ function unitAct(u) {
   if (u.id === 'wolf' && target.hp > 0 && Math.random() < 0.25) {
     target.stunned = true; target.el.classList.add('stunned');
   }
+  // 🦇 박쥐 흡수: 아군 공격력을 조금씩 빼앗음 (2지역부터, 예준 기획)
+  if (u.kind === 'mon' && u.drain && target.hp > 0 && target.atk > 10) {
+    target.atk = Math.max(10, target.atk - u.drain);
+    u.atk += u.drain;
+    popDmg(target.el, '🦇 공격력 -' + u.drain, 'tickle');
+  }
   // 🍄 독
   if (u.kind === 'mon' && u.poison && target.hp > 0) {
     target.hp -= u.poison; setUnitBar(target);
@@ -2134,17 +2193,17 @@ function checkEnd() {
 
 // ── 던전 (자동사냥) ──
 // 스테이지 입장: 전투 전 스토리 → 전투
-function enterStage(n) {
+function enterStage(rid, n) {
   if (!myDeck().length) return;
   $('stage-screen').classList.remove('on');
-  runStory(n, 'before', () => startStage(n));
+  runStory(stageKey(rid, n), 'before', () => startStage(rid, n));
 }
-function startStage(n) {
+function startStage(rid, n) {
   mode = 'stage';
   const deck = myDeck();
   if (!deck.length) return;
   B = mkBattle('stage');
-  B.stage = n; B.seg = 0; B.segTotal = segCount(n);
+  B.region = rid; B.stage = n; B.seg = 0; B.segTotal = segCount(rid, n);
   B.teams.A = deck.map(id => mkHero(id, 'A'));
   $('stage-screen').classList.remove('on');
   $('title-screen').style.display = 'none';
@@ -2158,12 +2217,15 @@ function startStage(n) {
 function nextSegment() {
   if (!B || B.over) return;
   B.seg++;
-  const isBoss = B.stage === 10 && B.seg === B.segTotal;
-  const pool = stagePool(B.stage);
+  const R = regionOf(B.region);
+  const isBoss = B.stage === R.stages && B.seg === B.segTotal;
+  const pool = stagePool(B.region, B.stage);
   const types = isBoss ? ['king']
     : Array.from({ length: 2 + (Math.random() < 0.4 ? 1 : 0) }, () => pool[Math.floor(Math.random() * pool.length)]);
-  const hpScale = 1 + (B.stage - 1) * 0.12, atkScale = 1 + (B.stage - 1) * 0.05;
-  B.teams.B = types.map(t => mkMon(t, 'B', hpScale, atkScale));
+  // 지역 배율 적용 (예준: 2지역 애들 배율 1.175배)
+  const hpScale = (1 + (B.stage - 1) * 0.12) * R.mult;
+  const atkScale = (1 + (B.stage - 1) * 0.05) * R.mult;
+  B.teams.B = types.map(t => mkMon(t, 'B', hpScale, atkScale, R));
   renderField();
   const now = Date.now();
   B.teams.B.forEach((u, i) => {
@@ -2173,8 +2235,8 @@ function nextSegment() {
   });
   B.teams.A.forEach(u => { if (u.nextAt < now) u.nextAt = now + 600; });
   $('dungeon-name').textContent = isBoss
-    ? '1-10 즈은하시티 · 👑 보스전!'
-    : '1-' + B.stage + ' 즈은하시티 · 길 ' + B.seg + '/' + B.segTotal + ' · 자동사냥';
+    ? B.region + '-' + B.stage + ' ' + R.name + ' · 👑 보스전!'
+    : B.region + '-' + B.stage + ' ' + R.name + ' · 길 ' + B.seg + '/' + B.segTotal + ' · 자동사냥';
 }
 
 // ── 자동사냥 컨트롤 ──
@@ -2201,21 +2263,23 @@ $('speed-btn').onclick = () => {
 
 // ── 승리 / 패배 / 나가기 ──
 function stageWin() {
-  const n = B.stage;
+  const rid = B.region, n = B.stage, key = stageKey(rid, n);
   // 클리어 후 스토리 → 보상 화면
-  if (!seenStory(n + '-after') && STORY[n] && STORY[n].after) {
-    return runStory(n, 'after', () => showStageReward(n));
+  if (!seenStory(key + '-after') && STORY[key] && STORY[key].after) {
+    return runStory(key, 'after', () => showStageReward(rid, n));
   }
-  showStageReward(n);
+  showStageReward(rid, n);
 }
-function showStageReward(n) {
-  const first = !(saveData.cleared || []).includes(String(n));
-  const candy = 4 + n, tickets = first ? 3 : 1;
+function showStageReward(rid, n) {
+  const R = regionOf(rid);
+  const first = !isCleared(rid, n);
+  // 지역이 올라갈수록 보상도 상승 (예준 방침)
+  const candy = Math.round((4 + n) * R.reward), tickets = first ? 3 : 1;
   saveData.candy = (saveData.candy || 0) + candy;
   saveData.tickets += tickets;
   let lvHtml = '';
   if (first) {
-    saveData.cleared = [...(saveData.cleared || []), String(n)];
+    saveData.cleared = [...(saveData.cleared || []), stageKey(rid, n)];
     // 스토리 첫 클리어 = 출전한 덱 전원 레벨 +1 (예준 기획)
     const ups = [];
     B.teams.A.forEach(u => {
@@ -2227,7 +2291,7 @@ function showStageReward(n) {
   // 🎒 도구 드랍
   let dropHtml = '';
   const unowned = Object.keys(ITEMS).filter(i => !saveData.items[i]);
-  if (n === 10 || Math.random() < 0.3) {
+  if (n === R.stages || Math.random() < 0.3) {   // 지역 보스는 확정 드랍
     if (unowned.length) {
       const drop = unowned[Math.floor(Math.random() * unowned.length)];
       saveData.items[drop] = true;
@@ -2237,21 +2301,22 @@ function showStageReward(n) {
   }
   persist();
   if (ART.chest) { $('result-chest').src = ART.chest; $('result-chest').style.display = 'block'; }
-  $('result-title').textContent = '🎉 1-' + n + ' 클리어!';
+  $('result-title').textContent = '🎉 ' + rid + '-' + n + ' 클리어!' +
+    (n === R.stages ? ' 🏆 ' + R.name + ' 정복!' : '');
   $('result-rewards').innerHTML = '⭐ 별사탕 +' + candy + '<br>🎟️ 뽑기권 +' + tickets + (first ? ' (첫 클리어!)' : '') + lvHtml + dropHtml;
   $('result-actions').innerHTML = '<button class="result-action" id="result-ok">확인</button>';
   $('result-ok').onclick = exitBattle;
   $('stage-result').classList.add('on');
 }
 function stageLose() {
-  const n = B.stage;
+  const rid = B.region, n = B.stage;
   $('result-chest').style.display = 'none';
   $('result-title').textContent = '💀 덱 전멸...';
   $('result-rewards').textContent = '즈은하시티는 만만하지 않다! 덱을 바꾸거나 레벨을 올려보자.';
   $('result-actions').innerHTML =
     '<button class="result-action" id="result-retry">다시 도전</button>' +
     '<button class="result-action" id="result-exit">나가기</button>';
-  $('result-retry').onclick = () => { $('stage-result').classList.remove('on'); startStage(n); };
+  $('result-retry').onclick = () => { $('stage-result').classList.remove('on'); startStage(rid, n); };
   $('result-exit').onclick = exitBattle;
   $('stage-result').classList.add('on');
 }
