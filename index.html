@@ -1057,6 +1057,9 @@ loadArt('map', 'character/map', src => { // 던전 맵 (예준 그림) — 전�
   bs.style.backgroundPosition = 'center';
   bs.classList.add('has-map');
 });
+loadArt('map2', 'character/map2');       // 🏚️ 2지역 할로우 타운 맵 (그리면 2지역 전투 배경으로)
+loadArt('boss2', 'character/boss2');     // 🏚️ 2지역 보스 (2-13)
+[1,2,3,4,5].forEach(i => loadArt('popcorn' + i, 'character/popcorn' + i)); // 🍿 팝콘 5단 진화
 loadArt('attack', 'character/attack');
 loadArt('ult', 'character/ult'); // 전용 변신 이펙트 (그리면 6분할 방사에 자동 사용)
 
@@ -2051,6 +2054,17 @@ function isCleared(rid, n) { return (saveData.cleared || []).includes(stageKey(r
   if (changed) { saveData.cleared = out; persist(); }
 })();
 
+// 지역마다 다른 맵 (2지역 맵을 그리면 자동 적용, 없으면 1지역 맵)
+function setBattleMap(rid) {
+  const src = (rid >= 2 && ART.map2) ? ART.map2 : ART.map;
+  const bs = $('battle-screen');
+  if (!src) return;
+  bs.style.backgroundImage = 'linear-gradient(rgba(13,11,20,.30), rgba(13,11,20,.55)), url("' + src + '")';
+  bs.style.backgroundSize = 'cover';
+  bs.style.backgroundPosition = 'center';
+  bs.classList.add('has-map');
+}
+
 function segCount(rid, n) {
   const last = regionOf(rid).stages;
   if (n === last) return 3;                        // 보스전
@@ -2387,6 +2401,7 @@ function startStage(rid, n) {
   if (!deck.length) return;
   B = mkBattle('stage');
   B.region = rid; B.stage = n; B.seg = 0; B.segTotal = segCount(rid, n);
+  setBattleMap(rid);
   B.teams.A = deck.map(id => mkHero(id, 'A'));
   $('stage-screen').classList.remove('on');
   $('title-screen').style.display = 'none';
@@ -2409,6 +2424,12 @@ function nextSegment() {
   const hpScale = (1 + (B.stage - 1) * 0.12) * R.mult;
   const atkScale = (1 + (B.stage - 1) * 0.05) * R.mult;
   B.teams.B = types.map(t => mkMon(t, 'B', hpScale, atkScale, R));
+  // 지역별 보스 그림 (2지역 보스를 그리면 자동 적용)
+  if (isBoss && B.region >= 2 && ART.boss2) {
+    const b = B.teams.B[0];
+    b.art = ART.boss2;
+    b.name = R.name + ' 보스';
+  }
   renderField();
   const now = Date.now();
   B.teams.B.forEach((u, i) => {
