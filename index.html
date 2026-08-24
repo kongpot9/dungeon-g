@@ -934,6 +934,44 @@ const SFX = (() => {
 // 저장된 설정 반영 + 첫 터치에 오디오 잠금 해제 (브라우저 정책)
 document.addEventListener('pointerdown', () => SFX.unlock(), { once: true });
 
+// ── 🎤 예준이 만든 소리 자동 장착 (sound/ 폴더에 파일 넣으면 합성음 대신 사용) ──
+// 그림이랑 똑같은 방식: 파일이 있으면 쓰고, 없으면 기본 합성음
+const SND = {};
+function loadSnd(name) {
+  const exts = ['mp3', 'wav', 'm4a', 'ogg', 'MP3', 'WAV', 'M4A'];
+  let i = 0;
+  const tryNext = () => {
+    if (i >= exts.length) return;
+    const url = 'sound/' + name + '.' + exts[i++];
+    fetch(url).then(res => {
+      if (!res.ok) throw 0;
+      return res.arrayBuffer();
+    }).then(buf => {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      SND._ctx = SND._ctx || new AC();
+      return SND._ctx.decodeAudioData(buf);
+    }).then(decoded => { if (decoded) SND[name] = decoded; })
+      .catch(() => tryNext());
+  };
+  tryNext();
+}
+['click','hit','crit','hurt','tick','legend','transform','win','lose','reward','stun'].forEach(loadSnd);
+function playSnd(name) {
+  const b = SND[name], c = SND._ctx;
+  if (!b || !c || !SFX.isOn()) return false;
+  if (c.state === 'suspended') c.resume();
+  const s = c.createBufferSource(); s.buffer = b;
+  const g = c.createGain(); g.gain.value = 0.9;
+  s.connect(g); g.connect(c.destination); s.start();
+  return true;
+}
+// 각 소리를 "파일 먼저, 없으면 합성음"으로 감싸기
+['click','hit','crit','hurt','tick','legend','transform','win','lose','reward','stun'].forEach(k => {
+  const synth = SFX[k];
+  SFX[k] = (...a) => { if (playSnd(k)) return; return synth.apply(SFX, a); };
+});
+
 // ── 예준 그림 자동 로더 ──
 // character/, skill/ 폴더에 정해진 이름의 파일이 있으면 임시 그림 대신 사용
 const ART = {};
