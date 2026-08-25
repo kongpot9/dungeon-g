@@ -934,9 +934,10 @@ const SFX = (() => {
     isOn() { return on; },
     unlock() { ac(); },
     click() { tone(760, 0.05, 'square', 0.06); },
-    hit: throttled(() => { noise(0.07, 0.1, 900); tone(140, 0.09, 'sine', 0.13, 0, 70); }, 60),
-    crit: throttled(() => { noise(0.11, 0.16, 1600); tone(90, 0.16, 'sine', 0.2, 0, 45); tone(520, 0.1, 'square', 0.08, 0.02); }, 60),
-    hurt: throttled(() => { tone(220, 0.1, 'sawtooth', 0.07, 0, 110); }, 80),
+    // ⚔️ 공격음 삭제 (예준 지시) — 합성음 안 냄. sound 폴더에 hit/crit 파일을 넣으면 그건 나옴
+    hit() {},
+    crit() {},
+    hurt() {},
     tick() { noise(0.03, 0.07, 2600); },                    // 뽑기 두구두구
     legend() {                                              // ⭐ 전설 팡파레
       [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 'triangle', 0.16, i * 0.11));
@@ -960,7 +961,8 @@ document.addEventListener('pointerdown', () => SFX.unlock(), { once: true });
 // 그림이랑 똑같은 방식: 파일이 있으면 쓰고, 없으면 기본 합성음
 const SND = {};
 function loadSnd(name) {
-  const exts = ['mp3', 'wav', 'm4a', 'ogg', 'MP3', 'WAV', 'M4A'];
+  // 녹화 파일(mp4)도 그대로 읽음 — 예준이 만든 원본을 손대지 않고 사용
+  const exts = ['mp3', 'wav', 'm4a', 'mp4', 'ogg', 'MP3', 'WAV', 'M4A', 'MP4'];
   let i = 0;
   const tryNext = () => {
     if (i >= exts.length) return;
