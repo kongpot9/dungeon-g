@@ -1073,6 +1073,9 @@ loadArt('priest', 'character/priest');   // 첫사랑성직자 (뽑기·도감)
 loadArt('josun', 'character/josun');       // 조슨대왕 — 신하 소환 어태커
 loadArt('wolf', 'character/wolf');         // 백울프 — 확률 스턴
 loadArt('watergirl', 'character/watergirl'); // 물소소녀 — 물꽃·박치기·비
+// 🎞️ 공격 모션 컷 (예준 그림) — 있으면 전투 중에 평소↔모션을 번갈아 보여줌
+['legend', 'legend2', 'priest', 'watergirl', 'josun', 'wolf']
+  .forEach(k => loadArt(k + '_atk', 'character/' + k + '_atk'));
 loadArt('raidboss', 'character/raidboss');   // 🐉 레이드 보스형님 (그리면 자동 교체)
 // 🍿 팝콘 그림 (그리면 자동 교체, 없으면 이모지)
 [1, 2, 3, 4, 5].forEach(i => loadArt('popcorn' + i, 'character/popcorn' + i));
@@ -2138,7 +2141,9 @@ function mkHero(id, side) {
   const maxHp = Math.round(base.hp * statMult * hMul);
   return {
     kind: 'hero', id, side, lv, attr, item, used: {}, name: base.name,
-    art: ART[heroKey(id)] || null, hasGauge: !!base.hasGauge, skill: base.skill,
+    art: ART[heroKey(id)] || null,
+    atkArt: ART[heroKey(id) + '_atk'] || null,   // 🎞️ 공격 모션 컷 (있을 때만 움직임)
+    hasGauge: !!base.hasGauge, skill: base.skill,
     atk: Math.round(base.atk * statMult * aMul), hp: maxHp, maxHp,
     gauge: 0, buffMult: 1, buffUntil: 0, transformed: false,
     hitCount: 0, stunned: false, nextAt: 0, el: null,
@@ -2192,6 +2197,23 @@ function spawnMinion(targetEl) {
   $('arena').appendChild(m);
   setTimeout(() => m.remove(), 750);
 }
+
+// ══════ 🎞️ 캐릭터 움직임 (예준 기획: 평소-평소-모션-모션 반복) ══════
+const ANIM_PATTERN = [0, 0, 1, 1];   // 0=평소, 1=공격 모션
+const ANIM_MS = 260;                  // 한 컷 보여주는 시간
+let animStep = 0;
+setInterval(() => {
+  if (!B || B.over) return;
+  animStep = (animStep + 1) % ANIM_PATTERN.length;
+  const useAtk = ANIM_PATTERN[animStep] === 1;
+  ['A', 'B'].forEach(side => (B.teams[side] || []).forEach(u => {
+    if (!u.el || u.hp <= 0 || !u.atkArt) return;
+    const img = u.el.querySelector('img.body');
+    if (!img) return;
+    const want = useAtk ? u.atkArt : u.art;
+    if (img.getAttribute('src') !== want) img.setAttribute('src', want);
+  }));
+}, ANIM_MS);
 
 function setUnitBar(u) {
   if (!u.el) return;
@@ -2356,6 +2378,7 @@ function fireSkill(u) {
     u.buffMult = TRANSFORM_DMG; u.buffUntil = Date.now() + TRANSFORM_SEC * 1000; u.transformed = true;
     const img = u.el.querySelector('img.body');
     if (ART.legend2 && img) img.src = ART.legend2;
+    if (ART.legend2) { u.art = ART.legend2; u.atkArt = ART.legend2_atk || null; }  // 🎞️ 변신 폼 모션
     u.name = '정룡술사';
     u.el.querySelector('.name-tag').innerHTML = unitTag(u);
     popDmg(u.el, '🐉 변신!', 'ult');
@@ -2384,6 +2407,7 @@ function battleTick() {
       u.transformed = false; u.buffMult = 1; u.name = HEROES[u.id].name;
       const img = u.el && u.el.querySelector('img.body');
       if (ART.legend && img) img.src = ART.legend;
+      if (ART.legend) { u.art = ART.legend; u.atkArt = ART.legend_atk || null; }  // 🎞️ 원래 폼 모션으로 복귀
       if (u.el) u.el.querySelector('.name-tag').innerHTML = unitTag(u);
     }
   }));
