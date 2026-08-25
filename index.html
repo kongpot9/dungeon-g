@@ -962,6 +962,9 @@ const SFX = (() => {
     lose() { [392, 330, 262].forEach((f, i) => tone(f, 0.26, 'sawtooth', 0.11, i * 0.16)); },
     reward() { tone(1047, 0.09, 'triangle', 0.11); tone(1319, 0.12, 'triangle', 0.11, 0.08); },
     stun: throttled(() => { tone(300, 0.14, 'square', 0.09, 0, 900); }, 100),
+    // 아래 둘은 예준 목소리 전용 (파일 없으면 아무 소리도 안 남)
+    gachaopen() {},   // 🎰 뽑기 창 들어갈 때 "한번 뽑아보게나"
+    pull() {},        // 🎲 뽑을 때 "호잇짜"
   };
 })();
 // 저장된 설정 반영 + 첫 터치에 오디오 잠금 해제 (브라우저 정책)
@@ -990,7 +993,7 @@ function loadSnd(name) {
   };
   tryNext();
 }
-['click','hit','crit','hurt','tick','legend','transform','win','lose','reward','stun'].forEach(loadSnd);
+['click','hit','crit','hurt','tick','legend','transform','win','lose','reward','stun','gachaopen','pull'].forEach(loadSnd);
 // 파일 앞쪽 무음만큼 건너뛰고 재생 (녹음 파일은 손대지 않음 — 시작 지점만 옮김)
 function silenceOffset(buf) {
   const d = buf.getChannelData(0), sr = buf.sampleRate;
@@ -1008,14 +1011,21 @@ function playSnd(name) {
   if (!b || !c || !SFX.isOn()) return false;
   if (c.state === 'suspended') c.resume();
   if (b._skip === undefined) b._skip = silenceOffset(b);
+  // 녹음마다 목소리 크기가 달라서 재생할 때만 음량을 맞춤 (파일은 그대로)
+  if (b._gain === undefined) {
+    const d = b.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < d.length; i += 8) { const v = Math.abs(d[i]); if (v > peak) peak = v; }
+    b._gain = peak > 0.01 ? Math.min(3.5, 0.85 / peak) : 1;
+  }
   const s = c.createBufferSource(); s.buffer = b;
-  const g = c.createGain(); g.gain.value = 0.9;
+  const g = c.createGain(); g.gain.value = b._gain;
   s.connect(g); g.connect(c.destination);
   s.start(0, b._skip);          // 무음 구간부터 건너뛰고 시작
   return true;
 }
 // 각 소리를 "파일 먼저, 없으면 합성음"으로 감싸기
-['click','hit','crit','hurt','tick','legend','transform','win','lose','reward','stun'].forEach(k => {
+['click','hit','crit','hurt','tick','legend','transform','win','lose','reward','stun','gachaopen','pull'].forEach(k => {
   const synth = SFX[k];
   SFX[k] = (...a) => { if (playSnd(k)) return; return synth.apply(SFX, a); };
 });
@@ -1450,6 +1460,7 @@ $('pull-btn').onclick = () => {
     return;
   }
   pulling = true;
+  SFX.pull();   // 🎲 "호잇짜"
   saveData.tickets--; saveData.pulls++;
   persist(); refreshTickets();
 
@@ -1802,6 +1813,7 @@ $('sp-pull-btn').onclick = () => {
   if (pulling) return;
   if ((saveData.spTickets || 0) <= 0) { $('gacha-msg').textContent = '🎫 스페셜 티켓이 없어! 영화관에서 얻을 수 있어'; return; }
   pulling = true;
+  SFX.pull();   // 🎲 "호잇짜"
   saveData.spTickets--; refreshSp();
   const pool = CHARS.filter(c => c.rank === '영웅' || c.rank === '전설');
   const legendaries = pool.filter(c => c.rank === '전설');
@@ -1811,6 +1823,7 @@ $('sp-pull-btn').onclick = () => {
   doPullResult(pick, true);
 };
 $('gacha-open').onclick = () => {
+  SFX.gachaopen();   // 🎰 "한번 뽑아보게나"
   $('gacha-result').classList.remove('on');
   $('gacha-stage').classList.remove('showing-result');
   $('gacha-msg').textContent = '';
