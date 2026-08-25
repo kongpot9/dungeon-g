@@ -315,6 +315,13 @@
   }
   #dungeon-name { position: absolute; top: 8px; width: 100%; text-align: center; color: #b9aee0; font-size: 13px; letter-spacing: 2px; }
   #battle-screen.has-map .brick { display: none; }
+  /* 배경 2겹: 뒤에는 흐리게 채우고, 앞에는 그림 전체를 온전히 */
+  #map-blur, #map-main {
+    position: absolute; inset: 0; pointer-events: none;
+    background-repeat: no-repeat; background-position: center;
+  }
+  #map-blur { background-size: cover; filter: blur(22px) brightness(.75); transform: scale(1.15); }
+  #map-main { background-size: contain; }
   #battle-screen.has-map #dungeon-name { color: #fff; text-shadow: 0 1px 4px #000; }
   .note { position: absolute; top: 8px; right: 10px; z-index: 30; color: #6c6394; font-size: 10px; }
 
@@ -617,6 +624,9 @@
 
   <!-- 전투 -->
   <div id="battle-screen">
+    <!-- 양옆 여백을 그림을 흐리게 확대해 채움 (그림 원본은 그대로, 잘림 없음) -->
+    <div id="map-blur"></div>
+    <div id="map-main"></div>
     <div class="brick"></div>
     <div id="dungeon-name">— 튜토리얼 던전 —</div>
     <div class="note">※ 그림은 임시! 예준이 그림으로 교체 예정</div>
@@ -1054,9 +1064,8 @@ loadArt('mushroom', 'character/mushroom'); // 독버섯
 loadArt('tree', 'character/tree');         // 화가 난 나무
 loadArt('map', 'character/map', src => { // 던전 맵 (예준 그림) — 전투 배경으로
   const bs = $('battle-screen');
-  bs.style.backgroundImage = 'linear-gradient(rgba(13,11,20,.30), rgba(13,11,20,.55)), url("' + src + '")';
-  bs.style.backgroundSize = 'cover';
-  bs.style.backgroundPosition = 'center';
+  $('map-main').style.backgroundImage = 'linear-gradient(rgba(13,11,20,.30), rgba(13,11,20,.55)), url("' + src + '")';
+  $('map-main').style.backgroundSize = 'cover';
   bs.classList.add('has-map');
 });
 loadArt('map2', 'character/map2');       // 🏚️ 2지역 할로우 타운 맵 (그리면 2지역 전투 배경으로)
@@ -2062,12 +2071,22 @@ function setBattleMap(rid) {
   const src = useMap2 ? ART.map2 : ART.map;
   const bs = $('battle-screen');
   if (!src) return;
-  bs.style.backgroundImage = 'linear-gradient(rgba(13,11,20,.30), rgba(13,11,20,.55)), url("' + src + '")';
-  // 2지역 그림엔 숨은 그림(오리·문양)이 위아래 끝에 있어서 잘리면 안 됨 → 전체가 보이게
-  bs.style.backgroundSize = useMap2 ? 'contain' : 'cover';
-  bs.style.backgroundPosition = 'center';
-  bs.style.backgroundRepeat = 'no-repeat';
-  bs.style.backgroundColor = useMap2 ? '#8f8a9c' : '';   // 양옆 여백을 그림 색과 맞춤
+  const url = 'url("' + src + '")';
+  const tint = 'linear-gradient(rgba(13,11,20,.30), rgba(13,11,20,.55))';
+  bs.style.backgroundImage = '';
+  bs.style.backgroundColor = '';
+  if (useMap2) {
+    // 숨은 그림(오리·문양)이 위아래 끝에 있어 잘리면 안 됨 → 전체를 보여주고
+    // 남는 양옆은 같은 그림을 흐리게 확대해 채움
+    $('map-blur').style.backgroundImage = url;
+    $('map-main').style.backgroundImage = tint + ', ' + url;
+  } else {
+    // 1지역은 화면을 꽉 채우는 게 자연스러움
+    $('map-blur').style.backgroundImage = '';
+    $('map-main').style.backgroundImage = tint + ', ' + url;
+    $('map-main').style.backgroundSize = 'cover';
+  }
+  if (useMap2) $('map-main').style.backgroundSize = 'contain';
   bs.classList.add('has-map');
 }
 
