@@ -991,13 +991,27 @@ function loadSnd(name) {
   tryNext();
 }
 ['click','hit','crit','hurt','tick','legend','transform','win','lose','reward','stun'].forEach(loadSnd);
+// 파일 앞쪽 무음만큼 건너뛰고 재생 (녹음 파일은 손대지 않음 — 시작 지점만 옮김)
+function silenceOffset(buf) {
+  const d = buf.getChannelData(0), sr = buf.sampleRate;
+  let peak = 0;
+  for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; }
+  if (peak === 0) return 0;
+  const thr = peak * 0.06;
+  for (let i = 0; i < d.length; i++) {
+    if (Math.abs(d[i]) > thr) return Math.max(0, i / sr - 0.02);  // 앞 20ms 여유
+  }
+  return 0;
+}
 function playSnd(name) {
   const b = SND[name], c = SND._ctx;
   if (!b || !c || !SFX.isOn()) return false;
   if (c.state === 'suspended') c.resume();
+  if (b._skip === undefined) b._skip = silenceOffset(b);
   const s = c.createBufferSource(); s.buffer = b;
   const g = c.createGain(); g.gain.value = 0.9;
-  s.connect(g); g.connect(c.destination); s.start();
+  s.connect(g); g.connect(c.destination);
+  s.start(0, b._skip);          // 무음 구간부터 건너뛰고 시작
   return true;
 }
 // 각 소리를 "파일 먼저, 없으면 합성음"으로 감싸기
