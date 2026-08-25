@@ -2058,12 +2058,16 @@ function isCleared(rid, n) { return (saveData.cleared || []).includes(stageKey(r
 
 // 지역마다 다른 맵 (2지역 맵을 그리면 자동 적용, 없으면 1지역 맵)
 function setBattleMap(rid) {
-  const src = (rid >= 2 && ART.map2) ? ART.map2 : ART.map;
+  const useMap2 = rid >= 2 && ART.map2;
+  const src = useMap2 ? ART.map2 : ART.map;
   const bs = $('battle-screen');
   if (!src) return;
   bs.style.backgroundImage = 'linear-gradient(rgba(13,11,20,.30), rgba(13,11,20,.55)), url("' + src + '")';
-  bs.style.backgroundSize = 'cover';
+  // 2지역 그림엔 숨은 그림(오리·문양)이 위아래 끝에 있어서 잘리면 안 됨 → 전체가 보이게
+  bs.style.backgroundSize = useMap2 ? 'contain' : 'cover';
   bs.style.backgroundPosition = 'center';
+  bs.style.backgroundRepeat = 'no-repeat';
+  bs.style.backgroundColor = useMap2 ? '#8f8a9c' : '';   // 양옆 여백을 그림 색과 맞춤
   bs.classList.add('has-map');
 }
 
